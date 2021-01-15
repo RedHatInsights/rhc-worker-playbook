@@ -2,7 +2,7 @@
 """Client and server classes corresponding to protobuf-defined services."""
 import grpc
 
-import yggdrasil_pb2 as yggdrasil__pb2
+from . import yggdrasil_pb2 as yggdrasil__pb2
 
 
 class DispatcherStub(object):
