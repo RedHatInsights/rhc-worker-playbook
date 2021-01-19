@@ -178,6 +178,7 @@ def dump_artifacts(kwargs):
         kwargs['envvars']['ANSIBLE_ROLES_PATH'] = roles_path
 
     obj = kwargs.get('playbook')
+    print(obj)
     if obj and isplaybook(obj):
         path = os.path.join(private_data_dir, 'project')
         kwargs['playbook'] = dump_artifact(json.dumps(obj), path, 'main.json')
