@@ -4,3 +4,8 @@ lib
 lib64
 include
 pip-selfcheck.json
+build
+dist
+libexec
+rhc_ansible_worker/contrib
+*.egg-info
