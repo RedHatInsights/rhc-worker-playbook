@@ -21,7 +21,7 @@ sed -i "/WORKER_LIB_DIR = .*/c\WORKER_LIB_DIR = \"%{worker_lib_dir}\"" rhc_ansib
 
 %install
 %{__python3} setup.py install --install-scripts %{_libexecdir}/rhc --root %{buildroot}
-%{__python3} -m pip install --target %{buildroot}%{_libdir}/rhc-ansible-worker ansible-runner
+%{__python3} -m pip install --target %{buildroot}%{_libdir}/rhc-ansible-worker ansible-runner grpcio grpcio-tools
 
 %post
 
