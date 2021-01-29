@@ -1,3 +1,4 @@
+%define _prefix /usr/local
 %define worker_lib_dir %{_libdir}/rhc-ansible-worker
 
 Name:       rhc-ansible-worker
@@ -20,7 +21,7 @@ Python-based worker for Red Hat connect, used to launch Ansible playbooks via An
 sed -i "/WORKER_LIB_DIR = .*/c\WORKER_LIB_DIR = \"%{worker_lib_dir}\"" rhc_ansible_worker/constants.py
 
 %install
-%{__python3} setup.py install --install-scripts %{_libexecdir}/rhc --root %{buildroot}
+%{__python3} setup.py install --install-scripts %{_libexecdir}/redhat-connect --root %{buildroot}
 %{__python3} -m pip install --target %{buildroot}%{_libdir}/rhc-ansible-worker ansible-runner grpcio grpcio-tools
 
 %post
@@ -33,7 +34,7 @@ sed -i "/WORKER_LIB_DIR = .*/c\WORKER_LIB_DIR = \"%{worker_lib_dir}\"" rhc_ansib
 rm -rf %{buildroot}
 
 %files
-%{_libexecdir}/rhc/ansible.worker
+%{_libexecdir}/redhat-connect/ansible.worker
 %{python3_sitelib}/rhc_ansible_worker/
 %{python3_sitelib}/rhc_ansible_worker*.egg-info/
 %{_libdir}/rhc-ansible-worker/
