@@ -1,4 +1,3 @@
-%define _prefix /usr/local
 %define worker_lib_dir %{_libdir}/rhc-worker-playbook
 
 Name:       rhc-worker-playbook
@@ -17,11 +16,9 @@ Python-based worker for Red Hat connect, used to launch Ansible playbooks via An
 
 %prep
 %setup -q
-sed -i "/WORKER_LIB_DIR = .*/c\WORKER_LIB_DIR = \"%{worker_lib_dir}\"" rhc_worker_playbook/constants.py
 
 %install
-%{__python3} setup.py install --install-scripts %{_libexecdir}/redhat-connect --root %{buildroot}
-%{__python3} -m pip install --target %{buildroot}%{_libdir}/rhc-worker-playbook ansible-runner grpcio grpcio-tools
+%{make_install} BUILDROOT=%{buildroot} PREFIX=%{_prefix} LIBDIR=%{_libdir} LIBEXECDIR=%{_libexecdir}
 
 %post
 

@@ -11,4 +11,5 @@ setuptools.setup(
     packages=setuptools.find_packages(),
     python_requires='>=3.6',
     entry_points={'console_scripts': ['rhc-worker-playbook.worker = rhc_worker_playbook.server:serve']},
+    zip_safe = False,
 )

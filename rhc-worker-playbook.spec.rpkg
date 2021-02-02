@@ -1,0 +1,20 @@
+Name:       {{{ git_dir_name }}}
+Version:    {{{ git_dir_version }}}
+Release:    1%{?dist}
+Summary:    Python worker for Red Hat connect that launches Ansible Runner
+License:    GPLv2+
+URL:        https://github.com/redhatinsights/rhc-worker-playbook
+Source:     {{{ git_dir_pack }}}
+
+%description
+rhc-worker-playbook is an addon for the rhc package that listens for
+messages over gRPC and launches Ansible playbooks.
+
+%prep
+{{{ git_dir_setup_macro }}}
+
+%install
+make %{make_install} BUILDROOT=%{buildroot} PREFIX=%{_prefix} LIBDIR=%{_libdir} LIBEXECDIR=%{_libexecdir} install
+
+%changelog
+{{{ git_dir_changelog }}}
