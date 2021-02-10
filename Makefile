@@ -6,11 +6,12 @@ TARBALL=$(DISTDIR)/$(PKGNAME)-*.tar.gz
 PREFIX        ?= /usr/local
 LIBDIR        ?= $(PREFIX)/lib
 LIBEXECDIR    ?= $(PREFIX)/libexec
+PYTHON	      ?= python3
 
 .PHONY: tarball
 tarball: $(TARBALL)
 $(TARBALL): dev-lib-dir
-	/usr/libexec/platform-python setup.py sdist
+	$(PYTHON) setup.py sdist
 
 .PHONY: installed-lib-dir
 installed-lib-dir:
@@ -22,8 +23,8 @@ dev-lib-dir:
 
 .PHONY: install
 install: installed-lib-dir
-	/usr/libexec/platform-python setup.py install --install-scripts $(BUILDROOT)$(LIBEXECDIR)/redhat-connect --prefix=$(BUILDROOT)$(PREFIX) --single-version-externally-managed --record /dev/null
-	/usr/libexec/platform-python -m pip install --target $(BUILDROOT)$(LIBDIR)/$(PKGNAME) ansible-runner grpcio grpcio-tools
+	$(PYTHON) setup.py install --install-scripts $(BUILDROOT)$(LIBEXECDIR)/rhc --prefix=$(BUILDROOT)$(PREFIX) --single-version-externally-managed --record /dev/null
+	$(PYTHON) -m pip install --target $(BUILDROOT)$(LIBDIR)/$(PKGNAME) ./vendor/*
 
 .PHONY: clean
 

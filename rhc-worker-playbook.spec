@@ -10,6 +10,9 @@ Source:     rhc-worker-playbook-0.1.0.tar.gz
 %{?__python3:Requires: %{__python3}}
 Requires:      python3-PyYAML
 BuildRequires: python3-devel
+BuildRequires: platform-python-pip
+BuildRequires: platform-python-setuptools
+BuildRequires: python3-setuptools
 
 %description
 Python-based worker for Red Hat connect, used to launch Ansible playbooks via Ansible Runner.
@@ -18,7 +21,7 @@ Python-based worker for Red Hat connect, used to launch Ansible playbooks via An
 %setup -q
 
 %install
-%{make_install} BUILDROOT=%{buildroot} PREFIX=%{_prefix} LIBDIR=%{_libdir} LIBEXECDIR=%{_libexecdir}
+%{make_install} BUILDROOT=%{buildroot} PREFIX=%{_prefix} LIBDIR=%{_libdir} LIBEXECDIR=%{_libexecdir} PYTHON=%{__python3}
 
 %post
 
@@ -30,7 +33,7 @@ Python-based worker for Red Hat connect, used to launch Ansible playbooks via An
 rm -rf %{buildroot}
 
 %files
-%{_libexecdir}/redhat-connect/rhc-worker-playbook.worker
+%{_libexecdir}/rhc/rhc-worker-playbook.worker
 %{python3_sitelib}/rhc_worker_playbook/
 %{python3_sitelib}/rhc_worker_playbook*.egg-info/
 %{_libdir}/rhc-worker-playbook/

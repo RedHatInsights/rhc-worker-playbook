@@ -19,7 +19,7 @@ messages over gRPC and launches Ansible playbooks.
 make %{make_install} BUILDROOT=%{buildroot} PREFIX=%{_prefix} LIBDIR=%{_libdir} LIBEXECDIR=%{_libexecdir} install
 
 %files
-%{_libexecdir}/redhat-connect/rhc-worker-playbook.worker
+%{_libexecdir}/rhc/rhc-worker-playbook.worker
 %{python3_sitelib}/rhc_worker_playbook/
 %{python3_sitelib}/rhc_worker_playbook*.egg-info/
 %{_libdir}/rhc-worker-playbook/
