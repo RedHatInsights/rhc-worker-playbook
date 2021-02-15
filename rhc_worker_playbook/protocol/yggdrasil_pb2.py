@@ -19,7 +19,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   syntax='proto3',
   serialized_options=b'Z,github.com/redhatinsights/yggdrasil/protocol',
   create_key=_descriptor._internal_create_key,
-  serialized_pb=b'\n\x0fyggdrasil.proto\x12\tyggdrasil\"\x07\n\x05\x45mpty\"\xbe\x01\n\x13RegistrationRequest\x12\x0f\n\x07handler\x18\x01 \x01(\t\x12\x0b\n\x03pid\x18\x02 \x01(\x03\x12\x18\n\x10\x64\x65tached_payload\x18\x03 \x01(\x08\x12>\n\x08\x66\x65\x61tures\x18\x04 \x03(\x0b\x32,.yggdrasil.RegistrationRequest.FeaturesEntry\x1a/\n\rFeaturesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\";\n\x14RegistrationResponse\x12\x12\n\nregistered\x18\x01 \x01(\x08\x12\x0f\n\x07\x61\x64\x64ress\x18\x02 \x01(\t\"\x8d\x01\n\x04\x44\x61ta\x12\x12\n\nmessage_id\x18\x01 \x01(\t\x12/\n\x08metadata\x18\x02 \x03(\x0b\x32\x1d.yggdrasil.Data.MetadataEntry\x12\x0f\n\x07payload\x18\x03 \x01(\x0c\x1a/\n\rMetadataEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"\t\n\x07Receipt2\x8a\x01\n\nDispatcher\x12M\n\x08Register\x12\x1e.yggdrasil.RegistrationRequest\x1a\x1f.yggdrasil.RegistrationResponse\"\x00\x12-\n\x04Send\x12\x0f.yggdrasil.Data\x1a\x12.yggdrasil.Receipt\"\x00\x32\x37\n\x06Worker\x12-\n\x04Send\x12\x0f.yggdrasil.Data\x1a\x12.yggdrasil.Receipt\"\x00\x42.Z,github.com/redhatinsights/yggdrasil/protocolb\x06proto3'
+  serialized_pb=b'\n\x0fyggdrasil.proto\x12\tyggdrasil\"\x07\n\x05\x45mpty\"\xbe\x01\n\x13RegistrationRequest\x12\x0f\n\x07handler\x18\x01 \x01(\t\x12\x0b\n\x03pid\x18\x02 \x01(\x03\x12\x18\n\x10\x64\x65tached_content\x18\x03 \x01(\x08\x12>\n\x08\x66\x65\x61tures\x18\x04 \x03(\x0b\x32,.yggdrasil.RegistrationRequest.FeaturesEntry\x1a/\n\rFeaturesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\";\n\x14RegistrationResponse\x12\x12\n\nregistered\x18\x01 \x01(\x08\x12\x0f\n\x07\x61\x64\x64ress\x18\x02 \x01(\t\"\xb5\x01\n\x04\x44\x61ta\x12\x12\n\nmessage_id\x18\x01 \x01(\t\x12/\n\x08metadata\x18\x02 \x03(\x0b\x32\x1d.yggdrasil.Data.MetadataEntry\x12\x0f\n\x07\x63ontent\x18\x03 \x01(\x0c\x12\x13\n\x0bresponse_to\x18\x04 \x01(\t\x12\x11\n\tdirective\x18\x05 \x01(\t\x1a/\n\rMetadataEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"\t\n\x07Receipt2\x8a\x01\n\nDispatcher\x12M\n\x08Register\x12\x1e.yggdrasil.RegistrationRequest\x1a\x1f.yggdrasil.RegistrationResponse\"\x00\x12-\n\x04Send\x12\x0f.yggdrasil.Data\x1a\x12.yggdrasil.Receipt\"\x00\x32\x37\n\x06Worker\x12-\n\x04Send\x12\x0f.yggdrasil.Data\x1a\x12.yggdrasil.Receipt\"\x00\x42.Z,github.com/redhatinsights/yggdrasil/protocolb\x06proto3'
 )
 
 
@@ -111,7 +111,7 @@ _REGISTRATIONREQUEST = _descriptor.Descriptor(
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='detached_payload', full_name='yggdrasil.RegistrationRequest.detached_payload', index=2,
+      name='detached_content', full_name='yggdrasil.RegistrationRequest.detached_content', index=2,
       number=3, type=8, cpp_type=7, label=1,
       has_default_value=False, default_value=False,
       message_type=None, enum_type=None, containing_type=None,
@@ -214,8 +214,8 @@ _DATA_METADATAENTRY = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=388,
-  serialized_end=435,
+  serialized_start=428,
+  serialized_end=475,
 )
 
 _DATA = _descriptor.Descriptor(
@@ -241,9 +241,23 @@ _DATA = _descriptor.Descriptor(
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='payload', full_name='yggdrasil.Data.payload', index=2,
+      name='content', full_name='yggdrasil.Data.content', index=2,
       number=3, type=12, cpp_type=9, label=1,
       has_default_value=False, default_value=b"",
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+    _descriptor.FieldDescriptor(
+      name='response_to', full_name='yggdrasil.Data.response_to', index=3,
+      number=4, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=b"".decode('utf-8'),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+    _descriptor.FieldDescriptor(
+      name='directive', full_name='yggdrasil.Data.directive', index=4,
+      number=5, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=b"".decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
@@ -260,7 +274,7 @@ _DATA = _descriptor.Descriptor(
   oneofs=[
   ],
   serialized_start=294,
-  serialized_end=435,
+  serialized_end=475,
 )
 
 
@@ -284,8 +298,8 @@ _RECEIPT = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=437,
-  serialized_end=446,
+  serialized_start=477,
+  serialized_end=486,
 )
 
 _REGISTRATIONREQUEST_FEATURESENTRY.containing_type = _REGISTRATIONREQUEST
@@ -362,8 +376,8 @@ _DISPATCHER = _descriptor.ServiceDescriptor(
   index=0,
   serialized_options=None,
   create_key=_descriptor._internal_create_key,
-  serialized_start=449,
-  serialized_end=587,
+  serialized_start=489,
+  serialized_end=627,
   methods=[
   _descriptor.MethodDescriptor(
     name='Register',
@@ -398,8 +412,8 @@ _WORKER = _descriptor.ServiceDescriptor(
   index=1,
   serialized_options=None,
   create_key=_descriptor._internal_create_key,
-  serialized_start=589,
-  serialized_end=644,
+  serialized_start=629,
+  serialized_end=684,
   methods=[
   _descriptor.MethodDescriptor(
     name='Send',
