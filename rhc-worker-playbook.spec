@@ -1,5 +1,3 @@
-%define worker_lib_dir %{_libdir}/rhc-worker-playbook
-
 Name:       rhc-worker-playbook
 Summary:    Red Hat connect worker for launching Ansible Runner
 Version:    0.1.0

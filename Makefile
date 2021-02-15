@@ -26,5 +26,10 @@ install: installed-lib-dir
 	$(PYTHON) setup.py install --install-scripts $(BUILDROOT)$(LIBEXECDIR)/rhc --prefix=$(BUILDROOT)$(PREFIX) --single-version-externally-managed --record /dev/null
 	$(PYTHON) -m pip install --target $(BUILDROOT)$(LIBDIR)/$(PKGNAME) ./vendor/*
 
+.PHONY: uninstall
+uninstall:
+	rm -rf $(LIBEXECDIR)/rhc/$(PKGNAME).worker
+	rm -rf $(LIBDIR)/python*/site-packages/$(PKGNAME)*
+	rm -rf $(LIBDIR)/$(PKGNAME)
 .PHONY: clean
 
