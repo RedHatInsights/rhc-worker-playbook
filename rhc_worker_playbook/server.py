@@ -8,6 +8,7 @@ import ansible_runner
 import time
 import json
 import uuid
+from requests import Request
 from concurrent import futures
 from .protocol import yggdrasil_pb2_grpc, yggdrasil_pb2
 from .dispatcher_events import executor_on_start, executor_on_failed
@@ -53,15 +54,25 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
         events.append(on_start)
 
         # required event for cloud connector
+        # TODO: send this if the job fails to start
         on_failed = executor_on_failed()
 
         for evt in runner.events:
             events.append(evt)
 
+        # generate the request body to ingress (form data)
+        # TODO?: generate by hand so request isn't a dependency
+        # TODO: change the content type to what it should be
+        req = Request.('POST', INSIGHTS_INGRESS_URL, files={
+                           "file": ("runner-events", json.dumps(events), "application/vnd.redhat.test.collection+tgz"),
+                           "metadata": {}
+                       }).prepare()
+
         returnedEvents = yggdrasil_pb2.Data(
             message_id=str(uuid.uuid4()).encode('utf-8'),
-            content=json.dumps(events).encode('utf-8'),
+            content=req.body,
             directive=INSIGHTS_INGRESS_URL,
+            metadata=req.headers,
             response_to=response_to)
         response = self.dispatcher.Send(returnedEvents)
         return yggdrasil_pb2.Receipt()
