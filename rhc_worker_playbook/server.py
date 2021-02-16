@@ -13,7 +13,7 @@ from .protocol import yggdrasil_pb2_grpc, yggdrasil_pb2
 from .dispatcher_events import executor_on_start, executor_on_failed
 # from insights.client.core.apps.ansible.playbook_verifier import verify
 
-INSIGHTS_INGRESS_URL = os.environ.get('INSIGHTS_INGRESS_URL') or "https://cloud.redhat.com/api/ingress/v1/upload"
+INSIGHTS_INGRESS_URL = os.environ.get('INSIGHTS_INGRESS_URL') or "https://cert.cloud.redhat.com/api/ingress/v1/upload"
 YGG_SOCKET_ADDR = os.environ.get('YGG_SOCKET_ADDR')
 if not YGG_SOCKET_ADDR:
     print("Missing YGG_SOCKET_ADDR environment variable")
@@ -36,7 +36,7 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
         events = []
         # parse playbook from data field
         playbook_str = request.content
-        response_to = request.response_to
+        response_to = request.message_id
         # message body has:
         #   playbook string
         #   interval with which to send status
