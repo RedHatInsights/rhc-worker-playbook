@@ -1,15 +1,14 @@
 Name:       rhc-worker-playbook
 Summary:    Red Hat connect worker for launching Ansible Runner
-Version:    0.1.0
+Version:    0.1.1
 Release:    0%{?dist}
 License:    GPLv2+
 Source:     rhc-worker-playbook-0.1.0.tar.gz
 
 %{?__python3:Requires: %{__python3}}
+Requires: ansible
 BuildRequires: python3-devel
 BuildRequires: platform-python-pip
-BuildRequires: python3-setuptools
-BuildRequires: platform-python-setuptools
 
 %description
 Python-based worker for Red Hat connect, used to launch Ansible playbooks via Ansible Runner.
