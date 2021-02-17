@@ -24,7 +24,6 @@ dev-lib-dir:
 .PHONY: install
 install: installed-lib-dir
 	$(PYTHON) setup.py install --install-scripts $(BUILDROOT)$(LIBEXECDIR)/rhc --prefix=$(BUILDROOT)$(PREFIX) --single-version-externally-managed --record /dev/null
-	$(PYTHON) -m pip install --help
 	$(PYTHON) -m pip install --target $(BUILDROOT)$(LIBDIR)/$(PKGNAME) --no-index --find-links vendor vendor/*
 
 .PHONY: uninstall
