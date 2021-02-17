@@ -63,7 +63,7 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
         # generate the request body to ingress (form data)
         # TODO?: generate by hand so request isn't a dependency
         # TODO: change the content type to what it should be
-        req = Request.('POST', INSIGHTS_INGRESS_URL, files={
+        req = Request('POST', INSIGHTS_INGRESS_URL, files={
                            "file": ("runner-events", json.dumps(events), "application/vnd.redhat.test.collection+tgz"),
                            "metadata": {}
                        }).prepare()

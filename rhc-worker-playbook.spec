@@ -8,6 +8,8 @@ Source:     rhc-worker-playbook-0.1.0.tar.gz
 %{?__python3:Requires: %{__python3}}
 BuildRequires: python3-devel
 BuildRequires: platform-python-pip
+BuildRequires: python3-setuptools
+BuildRequires: platform-python-setuptools
 
 %description
 Python-based worker for Red Hat connect, used to launch Ansible playbooks via Ansible Runner.
