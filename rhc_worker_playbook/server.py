@@ -64,8 +64,8 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
         # TODO?: generate by hand so request isn't a dependency
         # TODO: change the content type to what it should be
         req = Request('POST', INSIGHTS_INGRESS_URL, files={
-                           "file": ("runner-events", json.dumps(events), "application/vnd.redhat.test.collection+tgz"),
-                           "metadata": {}
+                           "file": ("runner-events", json.dumps(events), "application/vnd.redhat.advisor.collection+tgz"),
+                           "metadata": "{}"
                        }).prepare()
 
         returnedEvents = yggdrasil_pb2.Data(
