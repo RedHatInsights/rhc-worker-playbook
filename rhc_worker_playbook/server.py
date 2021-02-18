@@ -47,7 +47,7 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
         # playbook = verify(playbook)
         playbook = yaml.safe_load(playbook_str.decode('utf-8'))
         # run playbook
-        runner = ansible_runner.interface.run(playbook=playbook)
+        runner = ansible_runner.interface.run(playbook=playbook, envvars={"PYTHONPATH": WORKER_LIB_DIR})
 
         # required event for cloud connector
         on_start = executor_on_start()

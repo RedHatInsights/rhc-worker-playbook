@@ -1,9 +1,9 @@
 Name:       rhc-worker-playbook
 Summary:    Red Hat connect worker for launching Ansible Runner
-Version:    0.1.1
+Version:    0.1.2
 Release:    0%{?dist}
 License:    GPLv2+
-Source:     rhc-worker-playbook-0.1.1.tar.gz
+Source:     rhc-worker-playbook-0.1.2.tar.gz
 
 %{?__python3:Requires: %{__python3}}
 BuildRequires: python3-devel
