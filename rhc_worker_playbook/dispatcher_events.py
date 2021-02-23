@@ -1,12 +1,13 @@
 '''
 Event-generating functions for the Playbook Dispatcher
 '''
+import uuid
 
 # required event for cloud connector
-def executor_on_start(uuid=None, correlation_id=None, stdout=None):
+def executor_on_start(correlation_id=None, stdout=None):
     return {
         "event": "executor_on_start",
-        "uuid": uuid,
+        "uuid": str(uuid.uuid4()),
         "counter": -1,
         "stdout": stdout,
         "start_line": 0,
@@ -17,10 +18,10 @@ def executor_on_start(uuid=None, correlation_id=None, stdout=None):
     }
 
 # required event for cloud connector
-def executor_on_failed(uuid=None, correlation_id=None, stdout=None, error_code=None, error_details=None):
+def executor_on_failed(correlation_id=None, stdout=None, error_code=None, error_details=None):
     return {
         "event": "executor_on_failed",
-        "uuid": uuid,
+        "uuid": str(uuid.uuid4()),
         "counter": -1,
         "stdout": stdout,
         "start_line": 0,
