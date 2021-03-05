@@ -52,6 +52,15 @@ if not YGG_SOCKET_ADDR:
 # massage the value for python grpc
 YGG_SOCKET_ADDR = YGG_SOCKET_ADDR.replace("unix:@", "unix-abstract:")
 
+def _newlineDelimited(events):
+    '''
+    Dump a list into a newline-delimited JSON format
+    '''
+    output = ''
+    for e in events:
+        output += json.dumps(e) + '\n'
+    return output
+
 def _generateRequest(events, return_url):
     '''
     Generate the HTTP request
@@ -59,7 +68,7 @@ def _generateRequest(events, return_url):
     # TODO?: generate by hand so request isn't a dependency
     # TODO: change the content type to what it should be
     return Request('POST', return_url, files={
-        "file": ("runner-events", json.dumps(events), "application/vnd.redhat.advisor.collection+tgz"),
+        "file": ("runner-events", _newlineDelimited(events), "application/vnd.redhat.playbook.v1+jsonl"),
         "metadata": "{}"
     }).prepare()
 
