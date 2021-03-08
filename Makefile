@@ -21,10 +21,14 @@ installed-lib-dir:
 dev-lib-dir:
 	sed -i "/WORKER_LIB_DIR = .*/c\WORKER_LIB_DIR = os.path.join(os.path.dirname(__file__), 'contrib')" ./rhc_worker_playbook/constants.py
 
+.PHONY: build
+build:
+	$(PYTHON) setup.py build
+
 .PHONY: install
 install: installed-lib-dir
-	$(PYTHON) setup.py install --install-scripts $(BUILDROOT)$(LIBEXECDIR)/rhc --prefix=$(BUILDROOT)$(PREFIX) --single-version-externally-managed --record /dev/null
-	$(PYTHON) -m pip install --target $(BUILDROOT)$(LIBDIR)/$(PKGNAME) --no-index --find-links vendor vendor/*
+	$(PYTHON) setup.py install --root=$(DESTDIR) --prefix=$(PREFIX) --install-scripts=$(LIBEXECDIR)/rhc --single-version-externally-managed --record /dev/null
+	$(PYTHON) -m pip install --target $(DESTDIR)$(LIBDIR)/$(PKGNAME) --no-index --find-links vendor vendor/*
 
 .PHONY: uninstall
 uninstall:

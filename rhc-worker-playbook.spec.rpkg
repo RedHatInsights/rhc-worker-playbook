@@ -1,7 +1,9 @@
+%define debug_package %{nil}
+
 Name:       {{{ git_dir_name }}}
 Version:    {{{ git_dir_version }}}
 Release:    1%{?dist}
-Summary:    Python worker for Red Hat connect that launches Ansible Runner
+Summary:    Python worker for Red Hat connector that launches Ansible Runner
 License:    GPLv2+
 URL:        https://github.com/redhatinsights/rhc-worker-playbook
 Source:     {{{ git_dir_pack }}}
@@ -20,22 +22,17 @@ Python-based worker for Red Hat connect, used to launch Ansible playbooks via An
 %prep
 %setup -q
 
-%install
+%build
 export GRPC_PYTHON_BUILD_WITH_CYTHON=True
 export GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=True
 export GRPC_PYTHON_BUILD_SYSTEM_ZLIB=True
 export GRPC_PYTHON_BUILD_SYSTEM_CARES=True
 export GRPC_PYTHON_DISABLE_LIBC_COMPATIBILITY=True
-%{make_install} BUILDROOT=%{buildroot} PREFIX=%{_prefix} LIBDIR=%{_libdir} LIBEXECDIR=%{_libexecdir} PYTHON=%{__python3}
+%{__make} PREFIX=%{_prefix} installed-lib-dir
+%{make_build} build
 
-%post
-
-%preun
-
-%postun
-
-%clean
-rm -rf %{buildroot}
+%install
+%{make_install} PREFIX=%{_prefix}
 
 %files
 %{_libexecdir}/rhc/rhc-worker-playbook.worker
