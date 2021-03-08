@@ -8,17 +8,26 @@ License:    GPLv2+
 URL:        https://github.com/redhatinsights/rhc-worker-playbook
 Source:     {{{ git_dir_pack }}}
 
+%{?__python3:Requires: %{__python3}}
 BuildRequires: python3-devel
 BuildRequires: platform-python-pip
+BuildRequires: openssl-devel
+BuildRequires: c-ares-devel
+BuildRequires: zlib-devel
+BuildRequires: python3dist(cython)
 
 %description
-rhc-worker-playbook is an addon for the rhc package that listens for
-messages over gRPC and launches Ansible playbooks.
+Python-based worker for Red Hat connect, used to launch Ansible playbooks via Ansible Runner.
 
 %prep
-{{{ git_dir_setup_macro }}}
+%setup -q
 
 %build
+export GRPC_PYTHON_BUILD_WITH_CYTHON=True
+export GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=True
+export GRPC_PYTHON_BUILD_SYSTEM_ZLIB=True
+export GRPC_PYTHON_BUILD_SYSTEM_CARES=True
+export GRPC_PYTHON_DISABLE_LIBC_COMPATIBILITY=True
 %{__make} PREFIX=%{_prefix} installed-lib-dir
 %{make_build} build
 
@@ -30,6 +39,8 @@ messages over gRPC and launches Ansible playbooks.
 %{python3_sitelib}/rhc_worker_playbook/
 %{python3_sitelib}/rhc_worker_playbook*.egg-info/
 %{_libdir}/rhc-worker-playbook/
+
+%doc
 
 %changelog
 {{{ git_dir_changelog }}}
