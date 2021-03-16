@@ -66,7 +66,6 @@ def _generateRequest(events, return_url):
     Generate the HTTP request
     '''
     # TODO?: generate by hand so request isn't a dependency
-    # TODO: change the content type to what it should be
     return Request('POST', return_url, files={
         "file": ("runner-events", _newlineDelimited(events), "application/vnd.redhat.playbook.v1+jsonl"),
         "metadata": "{}"
