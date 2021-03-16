@@ -1,7 +1,7 @@
 import sys
 import os
 from .constants import WORKER_LIB_DIR, STABLE_EGG, RPM_EGG
-sys.path.append(WORKER_LIB_DIR)
+sys.path.insert(0, WORKER_LIB_DIR)
 import yaml
 import grpc
 import ansible_runner
