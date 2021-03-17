@@ -28,11 +28,11 @@ export GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=True
 export GRPC_PYTHON_BUILD_SYSTEM_ZLIB=True
 export GRPC_PYTHON_BUILD_SYSTEM_CARES=True
 export GRPC_PYTHON_DISABLE_LIBC_COMPATIBILITY=True
-%{__make} PREFIX=%{_prefix} installed-lib-dir
+%{__make} PREFIX=%{_prefix} LIBDIR=%{_libdir} installed-lib-dir
 %{make_build} build
 
 %install
-%{make_install} PREFIX=%{_prefix}
+%{make_install} PREFIX=%{_prefix} LIBDIR=%{_libdir}
 
 %files
 %{_libexecdir}/rhc/rhc-worker-playbook.worker
