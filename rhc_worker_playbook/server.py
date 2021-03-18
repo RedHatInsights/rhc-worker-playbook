@@ -18,6 +18,13 @@ for egg in (STABLE_EGG, RPM_EGG):
     try:
         if not os.path.exists(egg):
             raise ImportError("Egg %s is unavailable" % egg)
+
+        # gpg verify the egg before adding to path
+        from insights_client import gpg_validate
+        valid = gpg_validate(egg)
+        if not valid:
+            raise ImportError("Unable to validate %s" % egg)
+
         sys.path.append(egg)
         from insights.client.apps.ansible.playbook_verifier import verify
         from insights.client.apps.ansible.playbook_verifier.contrib import oyaml
