@@ -1,7 +1,8 @@
 import sys
 import os
-from .constants import WORKER_LIB_DIR, STABLE_EGG, RPM_EGG
+from .constants import WORKER_LIB_DIR, STABLE_EGG, RPM_EGG, CONFIG_FILE
 sys.path.insert(0, WORKER_LIB_DIR)
+import toml
 import yaml
 import grpc
 import ansible_runner
@@ -13,6 +14,26 @@ from concurrent import futures
 from .protocol import yggdrasil_pb2_grpc, yggdrasil_pb2
 from .dispatcher_events import executor_on_start, executor_on_failed
 
+YGG_SOCKET_ADDR = os.environ.get('YGG_SOCKET_ADDR')
+if not YGG_SOCKET_ADDR:
+    print("Missing YGG_SOCKET_ADDR environment variable")
+    sys.exit(1)
+# massage the value for python grpc
+YGG_SOCKET_ADDR = YGG_SOCKET_ADDR.replace("unix:@", "unix-abstract:")
+
+# load config file
+_config = {}
+if os.path.exists(CONFIG_FILE):
+    with open(CONFIG_FILE) as _f:
+        _config = toml.load(_f)
+else:
+    print("WARNING: Config file does not exist: %s. Using defaults." % CONFIG_FILE)
+
+VERIFY_ENABLED = _config.get('verify_playbook', True)
+VERIFY_VERSION_CHECK = _config.get('verify_playbook_version_check', True)
+INSIGHTS_CORE_GPG_CHECK = _config.get('insights_core_gpg_check', True)
+DIRECTIVE = _config.get("directive", "rhc-worker-playbook")
+
 for egg in (STABLE_EGG, RPM_EGG):
     # prefer stable > rpm
     try:
@@ -20,10 +41,11 @@ for egg in (STABLE_EGG, RPM_EGG):
             raise ImportError("Egg %s is unavailable" % egg)
 
         # gpg verify the egg before adding to path
-        from insights_client import gpg_validate
-        valid = gpg_validate(egg)
-        if not valid:
-            raise ImportError("Unable to validate %s" % egg)
+        if INSIGHTS_CORE_GPG_CHECK:
+            from insights_client import gpg_validate
+            valid = gpg_validate(egg)
+            if not valid:
+                raise ImportError("Unable to validate %s" % egg)
 
         sys.path.append(egg)
         from insights.client.apps.ansible.playbook_verifier import verify, loadPlaybookYaml
@@ -32,31 +54,6 @@ for egg in (STABLE_EGG, RPM_EGG):
     except ImportError as e:
         print("Could not import insights-core: %s" % e)
         VERIFY_ENABLED = False
-
-def _str2bool(_var):
-    '''
-    Python shenanigans to convert an env var string into a boolean
-    '''
-    if type(_var) == bool:
-        return _var
-
-    elif type(_var) == str:
-        if _var.lower() == 'false':
-            return False
-        elif _var.lower() == 'true':
-            return True
-        else:
-            print("Unknown boolean value %s, defaulting to True" % _var)
-            return True
-
-VERIFY_ENABLED = _str2bool(os.environ.get('YGG_VERIFY_PLAYBOOK', VERIFY_ENABLED))
-VERIFY_VERSION_CHECK = _str2bool(os.environ.get('YGG_VERIFY_VERSION_CHECK', True))
-YGG_SOCKET_ADDR = os.environ.get('YGG_SOCKET_ADDR')
-if not YGG_SOCKET_ADDR:
-    print("Missing YGG_SOCKET_ADDR environment variable")
-    sys.exit(1)
-# massage the value for python grpc
-YGG_SOCKET_ADDR = YGG_SOCKET_ADDR.replace("unix:@", "unix-abstract:")
 
 def _newlineDelimited(events):
     '''
@@ -136,7 +133,8 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
             response_interval = float(request.metadata.get('response_interval'))
             return_url = request.metadata.get('return_url')
         except LookupError as e:
-            print("Missing attribute in message: %s" % e)
+            # raise exception to bubble up to rhcd
+            raise Exception("Missing attribute in message: %s" % e)
 
         if VERIFY_ENABLED:
             playbook = loadPlaybookYaml(playbook_str.decode('utf-8'))
@@ -180,7 +178,6 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
             # last event sould be the failure, find the reason
             errorCode, errorDetails = _parseFailure(events[-1])
             if errorCode == "ANSIBLE_PLAYBOOK_NOT_INSTALLED":
-                # TODO: send message back to dispatcher w/ the failure
                 print("The rhc-worker-playbook package requires the ansible package to be installed.")
             # required event for cloud connector
             on_failed = executor_on_failed(correlation_id=crc_dispatcher_correlation_id, error_code=errorCode, error_details=errorDetails)
@@ -197,7 +194,7 @@ def serve():
     dispatcher = yggdrasil_pb2_grpc.DispatcherStub(channel)
     registrationResponse = dispatcher.Register(
         yggdrasil_pb2.RegistrationRequest(
-            handler="rhc-worker-playbook",
+            handler=DIRECTIVE,
             detached_content=True,
             pid=os.getpid()))
     registered = registrationResponse.registered

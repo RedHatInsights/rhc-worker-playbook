@@ -29,17 +29,18 @@ export GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=True
 export GRPC_PYTHON_BUILD_SYSTEM_ZLIB=True
 export GRPC_PYTHON_BUILD_SYSTEM_CARES=True
 export GRPC_PYTHON_DISABLE_LIBC_COMPATIBILITY=True
-%{__make} PREFIX=%{_prefix} LIBDIR=%{_libdir} installed-lib-dir
+%{__make} PREFIX=%{_prefix} LIBDIR=%{_libdir} installed-lib-dir SYSCONFDIR=%{_sysconfdir}
 %{make_build} build
 
 %install
-%{make_install} PREFIX=%{_prefix} LIBDIR=%{_libdir}
+%{make_install} PREFIX=%{_prefix} LIBDIR=%{_libdir} SYSCONFDIR=%{_sysconfdir}
 
 %files
 %{_libexecdir}/rhc/rhc-worker-playbook.worker
 %{python3_sitelib}/rhc_worker_playbook/
 %{python3_sitelib}/rhc_worker_playbook*.egg-info/
 %{_libdir}/rhc-worker-playbook/
+%config %{_sysconfdir}/rhc/workers/rhc-worker-playbook.toml
 
 %doc
 
