@@ -2,7 +2,7 @@ import setuptools
 
 setuptools.setup(
     name="rhc-worker-playbook",
-    version="0.1.3",
+    version="0.1.4",
     author="Jeremy Crafts",
     author_email="jcrafts@redhat.com",
     description="Python worker for RHC",
