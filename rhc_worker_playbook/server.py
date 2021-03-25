@@ -49,11 +49,13 @@ for egg in (STABLE_EGG, RPM_EGG):
 
         sys.path.append(egg)
         from insights.client.apps.ansible.playbook_verifier import verify, loadPlaybookYaml
-        VERIFY_ENABLED = True
         break
     except ImportError as e:
-        print("Could not import insights-core: %s" % e)
-        VERIFY_ENABLED = False
+        err = "WARNING: Could not import insights-core: %s" % e
+        print(err)
+        if VERIFY_ENABLED:
+            # if verification is enabled and can't import insights-core, eject
+            raise ImportError(err)
 
 def _newlineDelimited(events):
     '''
