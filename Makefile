@@ -8,7 +8,8 @@ LIBDIR        ?= $(PREFIX)/lib
 LIBEXECDIR    ?= $(PREFIX)/libexec
 SYSCONFDIR    ?= $(PREFIX)/etc
 PYTHON	      ?= python3
-CONFIG_FILE	  ?= $(SYSCONFDIR)/rhc/workers/rhc-worker-playbook.toml
+CONFIG_DIR    ?= $(SYSCONFDIR)/rhc/workers
+CONFIG_FILE	  ?= $(CONFIG_DIR)/rhc-worker-playbook.toml
 
 .PHONY: tarball
 tarball: $(TARBALL)
