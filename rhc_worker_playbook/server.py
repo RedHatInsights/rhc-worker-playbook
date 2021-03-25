@@ -26,8 +26,7 @@ for egg in (STABLE_EGG, RPM_EGG):
             raise ImportError("Unable to validate %s" % egg)
 
         sys.path.append(egg)
-        from insights.client.apps.ansible.playbook_verifier import verify
-        from insights.client.apps.ansible.playbook_verifier.contrib import oyaml
+        from insights.client.apps.ansible.playbook_verifier import verify, loadPlaybookYaml
         VERIFY_ENABLED = True
         break
     except ImportError as e:
@@ -140,7 +139,7 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
             print("Missing attribute in message: %s" % e)
 
         if VERIFY_ENABLED:
-            playbook = oyaml.load(playbook_str.decode('utf-8'))
+            playbook = loadPlaybookYaml(playbook_str.decode('utf-8'))
             # call insights-core lib to verify playbook
             # don't catch exception - allow it to bubble up to rhcd
             playbook = verify(playbook, checkVersion=VERIFY_VERSION_CHECK)
