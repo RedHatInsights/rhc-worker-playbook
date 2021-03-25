@@ -29,11 +29,12 @@ dev-lib-dir:
 .PHONY: build
 build:
 	$(PYTHON) setup.py build
+	$(PYTHON) -m pip wheel --wheel-dir=vendor --no-index --find-links vendor vendor/*.tar.gz
 
 .PHONY: install
 install: installed-lib-dir
 	$(PYTHON) setup.py install --root=$(DESTDIR) --prefix=$(PREFIX) --install-scripts=$(LIBEXECDIR)/rhc --single-version-externally-managed --record /dev/null
-	$(PYTHON) -m pip install --target $(DESTDIR)$(LIBDIR)/$(PKGNAME) --no-index --find-links vendor vendor/*
+	$(PYTHON) -m pip install --target $(DESTDIR)$(LIBDIR)/$(PKGNAME) --no-index --find-links vendor vendor/*.whl
 	[[ -e $(DESTDIR)$(CONFIG_FILE) ]] || install -D -m644 ./rhc-worker-playbook.toml $(DESTDIR)$(CONFIG_FILE)
 
 .PHONY: uninstall
