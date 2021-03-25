@@ -15,6 +15,7 @@ BuildRequires: rhc
 BuildRequires: pkgconfig
 BuildRequires: python3-devel
 BuildRequires: python3dist(pip)
+BuildRequires: python3dist(wheel)
 BuildRequires: openssl-devel
 BuildRequires: c-ares-devel
 BuildRequires: zlib-devel
