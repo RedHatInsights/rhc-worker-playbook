@@ -9,7 +9,10 @@ URL:        https://github.com/redhatinsights/rhc-worker-playbook
 Source:     {{{ git_dir_pack }}}
 
 %{?__python3:Requires: %{__python3}}
+Requires: insights-client
 Requires: python3dist(requests)
+BuildRequires: rhc
+BuildRequires: pkgconfig
 BuildRequires: python3-devel
 BuildRequires: python3dist(pip)
 BuildRequires: openssl-devel
@@ -29,17 +32,20 @@ export GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=True
 export GRPC_PYTHON_BUILD_SYSTEM_ZLIB=True
 export GRPC_PYTHON_BUILD_SYSTEM_CARES=True
 export GRPC_PYTHON_DISABLE_LIBC_COMPATIBILITY=True
-%{__make} PREFIX=%{_prefix} LIBDIR=%{_libdir} installed-lib-dir
+%define rhc_config_dir $(pkg-config rhc --variable workerconfdir)
+
+%{__make} PREFIX=%{_prefix} LIBDIR=%{_libdir} installed-lib-dir CONFIG_DIR=%{rhc_config_dir}
 %{make_build} build
 
 %install
-%{make_install} PREFIX=%{_prefix} LIBDIR=%{_libdir}
+%{make_install} PREFIX=%{_prefix} LIBDIR=%{_libdir} CONFIG_DIR=%{rhc_config_dir}
 
 %files
 %{_libexecdir}/rhc/rhc-worker-playbook.worker
 %{python3_sitelib}/rhc_worker_playbook/
 %{python3_sitelib}/rhc_worker_playbook*.egg-info/
 %{_libdir}/rhc-worker-playbook/
+%config %{_sysconfdir}/rhc/workers/rhc-worker-playbook.toml
 
 %doc
 
