@@ -106,8 +106,9 @@ class Events(list):
     def __init__(self):
         pass
 
-    def addEvent(self, event_data):
-        self.append(event_data)
+    def addEvent(self, event):
+        event.get("event_data", {}).pop("res", None)
+        self.append(event)
 
 
 class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
