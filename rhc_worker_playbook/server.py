@@ -107,7 +107,7 @@ class Events(list):
         pass
 
     def addEvent(self, event):
-        event.get("event_data", {}).pop("res", None)
+        event.get("event_data", {}).get("res", {}).pop("ansible_facts", None)
         self.append(event)
 
 
