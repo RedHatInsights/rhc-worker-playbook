@@ -107,7 +107,11 @@ class Events(list):
         pass
 
     def addEvent(self, event):
-        event.get("event_data", {}).get("res", {}).pop("ansible_facts", None)
+        try:
+            event.get("event_data", {}).get("res", {}).pop("ansible_facts", None)
+        except AttributeError:
+            # one of the fields was empty
+            pass
         self.append(event)
 
 
@@ -149,9 +153,12 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
             playbook = yaml.safe_load(playbook_str.decode('utf-8'))
 
         for item in playbook:
-            if 'vars' in item:
-                # remove signature field, ansible-runner dislikes bytes
-                item['vars'].pop('insights_signature', None)
+            # remove signature field, ansible-runner dislikes bytes
+            try:
+                item.get('vars', {}).pop('insights_signature', None)
+            except AttributeError:
+                # vars was empty
+                pass
 
         # required event for cloud connector
         on_start = executor_on_start(correlation_id=crc_dispatcher_correlation_id)
