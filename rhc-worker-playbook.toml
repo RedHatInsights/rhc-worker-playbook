@@ -4,7 +4,7 @@
 directive = "rhc-worker-playbook"
 
 # whether to verify incoming playboks
-verify_playbook = true
+verify_playbook = false
 
 # whether the playbook verification should ensure latest insights-core version
 verify_playbook_version_check = true
