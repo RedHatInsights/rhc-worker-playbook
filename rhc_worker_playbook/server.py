@@ -9,6 +9,8 @@ import ansible_runner
 import time
 import json
 import uuid
+import copy
+import subprocess
 from requests import Request
 from concurrent import futures
 from .protocol import yggdrasil_pb2_grpc, yggdrasil_pb2
@@ -20,42 +22,6 @@ if not YGG_SOCKET_ADDR:
     sys.exit(1)
 # massage the value for python grpc
 YGG_SOCKET_ADDR = YGG_SOCKET_ADDR.replace("unix:@", "unix-abstract:")
-
-# load config file
-_config = {}
-if os.path.exists(CONFIG_FILE):
-    with open(CONFIG_FILE) as _f:
-        _config = toml.load(_f)
-else:
-    print("WARNING: Config file does not exist: %s. Using defaults." % CONFIG_FILE)
-
-VERIFY_ENABLED = _config.get('verify_playbook', True)
-VERIFY_VERSION_CHECK = _config.get('verify_playbook_version_check', True)
-INSIGHTS_CORE_GPG_CHECK = _config.get('insights_core_gpg_check', True)
-DIRECTIVE = _config.get("directive", "rhc-worker-playbook")
-
-for egg in (STABLE_EGG, RPM_EGG):
-    # prefer stable > rpm
-    try:
-        if not os.path.exists(egg):
-            raise ImportError("Egg %s is unavailable" % egg)
-
-        # gpg verify the egg before adding to path
-        if INSIGHTS_CORE_GPG_CHECK:
-            from insights_client import gpg_validate
-            valid = gpg_validate(egg)
-            if not valid:
-                raise ImportError("Unable to validate %s" % egg)
-
-        sys.path.append(egg)
-        from insights.client.apps.ansible.playbook_verifier import verify, loadPlaybookYaml
-        break
-    except ImportError as e:
-        err = "WARNING: Could not import insights-core: %s" % e
-        print(err)
-        if VERIFY_ENABLED:
-            # if verification is enabled and can't import insights-core, eject
-            raise ImportError(err)
 
 def _newlineDelimited(events):
     '''
@@ -99,6 +65,29 @@ def _parseFailure(event):
     # TODO: enumerate more failure types
     return errorCode, errorDetails
 
+def _loadConfig():
+    # load config file
+    _config = {}
+    if os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE) as _f:
+            _config = toml.load(_f)
+    else:
+        print("WARNING: Config file does not exist: %s. Using defaults." % CONFIG_FILE)
+
+    parsedConfig = {
+        "verify_enabled": _config.get('verify_playbook', True)
+        "verify_version_check": _config.get('verify_playbook_version_check', True)
+        "insights_core_gpg_check": _config.get('insights_core_gpg_check', True)
+    }
+    return parsedConfig
+
+def _updateCore():
+    '''
+    Run the insights-client "update" phase alone to populate newest.egg
+    '''
+    subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "core_update.py")])
+
+
 class Events(list):
     '''
     Extension of list to receive ansible-runner events
@@ -125,6 +114,12 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
         # we have received it
         yggdrasil_pb2.Receipt()
 
+        # load configuration
+        config = _loadConfig()
+
+        # try to update insights-core
+        _updateCore()
+
         events = Events()
         # parse playbook from data field
         try:
@@ -138,11 +133,12 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
             # raise exception to bubble up to rhcd
             raise Exception("Missing attribute in message: %s" % e)
 
-        if VERIFY_ENABLED:
-            playbook = loadPlaybookYaml(playbook_str.decode('utf-8'))
-            # call insights-core lib to verify playbook
-            # don't catch exception - allow it to bubble up to rhcd
-            playbook = verify(playbook, checkVersion=VERIFY_VERSION_CHECK)
+        if config['verify_enabled']:
+            verifyProc = subprocess.run(
+                ["insights-client", "--offline", "-m", "insights.client.apps.ansible.playbook_verifier"],
+                stdin=playbook_str)
+            playbook_str = verifyProc.stdout
+            playbook = yaml.safe_load(playbook_str.decode('utf-8'))
         else:
             print("WARNING: Playbook verification disabled.")
             playbook = yaml.safe_load(playbook_str.decode('utf-8'))
@@ -188,6 +184,7 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
         # send the final message after playbook completed
         returnedEvents = _composeDispatcherMessage(events, return_url, response_to)
         response = self.dispatcher.Send(returnedEvents)
+
         return
 
 def serve():
@@ -196,7 +193,7 @@ def serve():
     dispatcher = yggdrasil_pb2_grpc.DispatcherStub(channel)
     registrationResponse = dispatcher.Register(
         yggdrasil_pb2.RegistrationRequest(
-            handler=DIRECTIVE,
+            handler="rhc-worker-playbook",
             detached_content=True,
             pid=os.getpid()))
     registered = registrationResponse.registered
