@@ -81,18 +81,24 @@ def _loadConfig():
     }
     return parsedConfig
 
-def _updateCore():
+def _updateCore(config):
     '''
     Run the insights-client "update" phase alone to populate newest.egg
     '''
-    env = {}
+    env = {"PATH": ""}
     if config['insights_core_gpg_check'] == False:
         env["INSIGHTS_CORE_GPG_CHECK"] = "False"
+    print(env)
     updateProc = subprocess.Popen(
         [sys.executable, os.path.join(os.path.dirname(__file__), "core_update.py")],
-        env=env)
-    if verifyProc.return_code != 0:
-        raise Exception("Could not perform insights-core update.")
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE)
+    stdout, stderr = updateProc.communicate()
+    print(stdout)
+    print(stderr)
+    if updateProc.returncode != 0:
+        print("Could not perform insights-core update")
 
 class Events(list):
     '''
@@ -124,7 +130,7 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
         config = _loadConfig()
 
         # try to update insights-core
-        _updateCore()
+        _updateCore(config)
 
         events = Events()
         # parse playbook from data field
@@ -138,10 +144,10 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
         except LookupError as e:
             # raise exception to bubble up to rhcd
             raise Exception("Missing attribute in message: %s" % e)
-
-        if config['verify_enabled']:
-            args = ["insights-client", "--offline", "-m", "insights.client.apps.ansible.playbook_verifier"]
-            env = {}
+        
+        if config["verify_enabled"]:
+            args = ["insights-client", "--offline", "-m", "insights.client.apps.ansible.playbook_verifier", "--quiet"]
+            env = {"PATH": ""}
             if config["insights_core_gpg_check"] == False:
                 args.append("--no-gpg")
                 env["BYPASS_GPG"] = "True"
@@ -149,18 +155,19 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
                 args,
                 stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             playbook_str, err = verifyProc.communicate(input=playbook_str)
+            
             if err:
                 print("WARNING: Unable to verify playbook")
-            if verifyProc.return_code != 0:
-                raise Exception("Unable to verify playbook.")
-            playbook_str = verifyProc.stdout
+            if verifyProc.returncode != 0:
+                raise Exception("Unable to verify playbook: %s" % err)
             # remove this after insights-core fix
             stripped_pb = playbook_str.decode('utf-8').split("\n", 1)[1]
             playbook = yaml.safe_load(stripped_pb)
+            print("Playbook verified")
         else:
             print("WARNING: Playbook verification disabled.")
             playbook = yaml.safe_load(playbook_str.decode('utf-8'))
-
+        
         for item in playbook:
             if 'vars' in item:
                 # remove signature field, ansible-runner dislikes bytes
@@ -236,4 +243,5 @@ def serve():
 
 if __name__ == '__main__':
     serve()
+
 
