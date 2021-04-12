@@ -85,8 +85,14 @@ def _updateCore():
     '''
     Run the insights-client "update" phase alone to populate newest.egg
     '''
-    subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "core_update.py")])
-
+    env = {}
+    if config['insights_core_gpg_check'] == False:
+        env["INSIGHTS_CORE_GPG_CHECK"] = "False"
+    updateProc = subprocess.Popen(
+        [sys.executable, os.path.join(os.path.dirname(__file__), "core_update.py")],
+        env=env)
+    if verifyProc.return_code != 0:
+        raise Exception("Could not perform insights-core update.")
 
 class Events(list):
     '''
@@ -134,9 +140,16 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
             raise Exception("Missing attribute in message: %s" % e)
 
         if config['verify_enabled']:
-            verifyProc = subprocess.run(
-                ["insights-client", "--offline", "-m", "insights.client.apps.ansible.playbook_verifier"],
-                stdin=playbook_str)
+            args = ["insights-client", "--offline", "-m", "insights.client.apps.ansible.playbook_verifier"]
+            env = {}
+            if config["insights_core_gpg_check"] == False:
+                args.append("--no-gpg")
+                env["BYPASS_GPG"] = "True"
+            verifyProc = subprocess.run(args,
+                stdin=playbook_str,
+                env=env)
+            if verifyProc.return_code != 0:
+                raise Exception("Unable to verify playbook.")
             playbook_str = verifyProc.stdout
             playbook = yaml.safe_load(playbook_str.decode('utf-8'))
         else:
