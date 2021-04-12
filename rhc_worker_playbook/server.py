@@ -75,8 +75,8 @@ def _loadConfig():
         print("WARNING: Config file does not exist: %s. Using defaults." % CONFIG_FILE)
 
     parsedConfig = {
-        "verify_enabled": _config.get('verify_playbook', True)
-        "verify_version_check": _config.get('verify_playbook_version_check', True)
+        "verify_enabled": _config.get('verify_playbook', True),
+        "verify_version_check": _config.get('verify_playbook_version_check', True),
         "insights_core_gpg_check": _config.get('insights_core_gpg_check', True)
     }
     return parsedConfig
@@ -145,13 +145,18 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
             if config["insights_core_gpg_check"] == False:
                 args.append("--no-gpg")
                 env["BYPASS_GPG"] = "True"
-            verifyProc = subprocess.run(args,
-                stdin=playbook_str,
-                env=env)
+            verifyProc = subprocess.Popen(
+                args,
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            playbook_str, err = verifyProc.communicate(input=playbook_str)
+            if err:
+                print("WARNING: Unable to verify playbook")
             if verifyProc.return_code != 0:
                 raise Exception("Unable to verify playbook.")
             playbook_str = verifyProc.stdout
-            playbook = yaml.safe_load(playbook_str.decode('utf-8'))
+            # remove this after insights-core fix
+            stripped_pb = playbook_str.decode('utf-8').split("\n", 1)[1]
+            playbook = yaml.safe_load(stripped_pb)
         else:
             print("WARNING: Playbook verification disabled.")
             playbook = yaml.safe_load(playbook_str.decode('utf-8'))
