@@ -22,6 +22,7 @@ if not YGG_SOCKET_ADDR:
     sys.exit(1)
 # massage the value for python grpc
 YGG_SOCKET_ADDR = YGG_SOCKET_ADDR.replace("unix:@", "unix-abstract:")
+BASIC_PATH = "/sbin:/bin:/usr/sbin:/usr/bin"
 
 def _newlineDelimited(events):
     '''
@@ -128,7 +129,7 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
             #   but, it will allow us to update the egg!
             args = ["insights-client", "-m", "insights.client.apps.ansible.playbook_verifier",
                     "--quiet", "--payload", "noop", "--content-type", "noop"]
-            env = {"PATH": ""}
+            env = {"PATH": BASIC_PATH}
             if config["insights_core_gpg_check"] == False:
                 args.append("--no-gpg")
                 env["BYPASS_GPG"] = "True"
@@ -161,7 +162,7 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
         # run playbook
         runnerThread, runner = ansible_runner.interface.run_async(
             playbook=playbook,
-            envvars={"PYTHONPATH": WORKER_LIB_DIR},
+            envvars={"PYTHONPATH": WORKER_LIB_DIR, "PATH": BASIC_PATH},
             event_handler=events.addEvent,
             quiet=True)
 
