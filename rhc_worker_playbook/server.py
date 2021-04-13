@@ -9,7 +9,7 @@ import ansible_runner
 import time
 import json
 import uuid
-import subprocess
+from subprocess import Popen, PIPE
 from requests import Request
 from concurrent import futures
 from .protocol import yggdrasil_pb2_grpc, yggdrasil_pb2
@@ -89,8 +89,13 @@ class Events(list):
     def __init__(self):
         pass
 
-    def addEvent(self, event_data):
-        self.append(event_data)
+    def addEvent(self, event):
+        try:
+            event.get("event_data", {}).get("res", {}).pop("ansible_facts", None)
+        except AttributeError:
+            # one of the fields was null/empty
+            pass
+        self.append(event)
 
 
 class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
@@ -133,9 +138,9 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
             if config["insights_core_gpg_check"] == False:
                 args.append("--no-gpg")
                 env["BYPASS_GPG"] = "True"
-            verifyProc = subprocess.Popen(
+            verifyProc = Popen(
                 args,
-                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                stdin=PIPE, stdout=PIPE, stderr=PIPE,
                 env=env)
             playbook_str, err = verifyProc.communicate(input=playbook_str)
 
@@ -152,9 +157,12 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
             playbook = yaml.safe_load(playbook_str.decode('utf-8'))
 
         for item in playbook:
-            if 'vars' in item:
-                # remove signature field, ansible-runner dislikes bytes
-                item['vars'].pop('insights_signature', None)
+            # remove signature field, ansible-runner dislikes bytes
+            try:
+                item.get('vars', {}).pop('insights_signature', None)
+            except AttributeError:
+                # vars was null/empty
+                pass
 
         # required event for cloud connector
         on_start = executor_on_start(correlation_id=crc_dispatcher_correlation_id)
