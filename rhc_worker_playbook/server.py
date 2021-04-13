@@ -135,7 +135,8 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
                 env["BYPASS_GPG"] = "True"
             verifyProc = subprocess.Popen(
                 args,
-                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                env=env)
             playbook_str, err = verifyProc.communicate(input=playbook_str)
             print(playbook_str)
             if err:
