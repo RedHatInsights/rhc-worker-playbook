@@ -1,6 +1,6 @@
 import sys
 import os
-from .constants import WORKER_LIB_DIR, STABLE_EGG, RPM_EGG, CONFIG_FILE
+from .constants import WORKER_LIB_DIR, CONFIG_FILE
 sys.path.insert(0, WORKER_LIB_DIR)
 import toml
 import yaml
@@ -9,7 +9,6 @@ import ansible_runner
 import time
 import json
 import uuid
-import copy
 import subprocess
 from requests import Request
 from concurrent import futures
@@ -76,9 +75,10 @@ def _loadConfig():
         print("WARNING: Config file does not exist: %s. Using defaults." % CONFIG_FILE)
 
     parsedConfig = {
-        "verify_enabled": _config.get('verify_playbook', True),
-        "verify_version_check": _config.get('verify_playbook_version_check', True),
-        "insights_core_gpg_check": _config.get('insights_core_gpg_check', True)
+        "directive": _config.get("directive", "rhc-worker-playbook"),
+        "verify_playbook": _config.get("verify_playbook", True),
+        "verify_playbook_version_check": _config.get("verify_playbook_version_check", True),
+        "insights_core_gpg_check": _config.get("insights_core_gpg_check", True)
     }
     return parsedConfig
 
@@ -138,7 +138,7 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
                 stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                 env=env)
             playbook_str, err = verifyProc.communicate(input=playbook_str)
-            print(playbook_str)
+
             if err:
                 print("WARNING: Unable to verify playbook")
             if verifyProc.returncode != 0:
@@ -196,12 +196,15 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
         return
 
 def serve():
+    # load config to get directive
+    config = _loadConfig()
+
     # open the channel to ygg Dispatcher
     channel = grpc.insecure_channel(YGG_SOCKET_ADDR)
     dispatcher = yggdrasil_pb2_grpc.DispatcherStub(channel)
     registrationResponse = dispatcher.Register(
         yggdrasil_pb2.RegistrationRequest(
-            handler="rhc-worker-playbook",
+            handler=config["directive"],
             detached_content=True,
             pid=os.getpid()))
     registered = registrationResponse.registered
