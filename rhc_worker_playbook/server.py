@@ -9,15 +9,20 @@ import ansible_runner
 import time
 import json
 import uuid
+import atexit
 from subprocess import Popen, PIPE
 from requests import Request
 from concurrent import futures
 from .protocol import yggdrasil_pb2_grpc, yggdrasil_pb2
 from .dispatcher_events import executor_on_start, executor_on_failed
 
+# unbuffered stdout for logging to rhc
+sys.stdout = os.fdopen(sys.stdout.fileno(), 'wb', buffering=0)
+atexit.register(sys.stdout.close)
+
 YGG_SOCKET_ADDR = os.environ.get('YGG_SOCKET_ADDR')
 if not YGG_SOCKET_ADDR:
-    print("Missing YGG_SOCKET_ADDR environment variable")
+    _log("Missing YGG_SOCKET_ADDR environment variable")
     sys.exit(1)
 # massage the value for python grpc
 YGG_SOCKET_ADDR = YGG_SOCKET_ADDR.replace("unix:@", "unix-abstract:")
@@ -72,7 +77,7 @@ def _loadConfig():
         with open(CONFIG_FILE) as _f:
             _config = toml.load(_f)
     else:
-        print("WARNING: Config file does not exist: %s. Using defaults." % CONFIG_FILE)
+        _log("WARNING: Config file does not exist: %s. Using defaults." % CONFIG_FILE)
 
     parsedConfig = {
         "directive": _config.get("directive", "rhc-worker-playbook"),
@@ -81,6 +86,13 @@ def _loadConfig():
         "insights_core_gpg_check": _config.get("insights_core_gpg_check", True)
     }
     return parsedConfig
+
+def _log(message):
+    '''
+    Send message as bytes over unbuffered stdout for
+    RHC to log
+    '''
+    sys.stdout.write((message + '\n').encode())
 
 class Events(list):
     '''
@@ -129,7 +141,8 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
             # raise exception to bubble up to rhcd
             raise Exception("Missing attribute in message: %s" % e)
 
-        if config["verify_enabled"]:
+        if config["verify_playbook"]:
+            _log("Verifying playbook...")
             # --payload here will be a no-op because no upload is performed when using the verifier
             #   but, it will allow us to update the egg!
             args = ["insights-client", "-m", "insights.client.apps.ansible.playbook_verifier",
@@ -144,16 +157,14 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
                 env=env)
             playbook_str, err = verifyProc.communicate(input=playbook_str)
 
-            if err:
-                print("WARNING: Unable to verify playbook")
             if verifyProc.returncode != 0:
                 raise Exception("Unable to verify playbook: %s" % err)
             # remove this after insights-core fix
             stripped_pb = playbook_str.decode('utf-8').split("\n", 1)[1]
             playbook = yaml.safe_load(stripped_pb)
-            print("Playbook verified")
+            _log("Playbook verified")
         else:
-            print("WARNING: Playbook verification disabled.")
+            _log("WARNING: Playbook verification disabled.")
             playbook = yaml.safe_load(playbook_str.decode('utf-8'))
 
         for item in playbook:
@@ -164,6 +175,7 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
                 # vars was null/empty
                 pass
 
+        _log("Starting playbook run...")
         # required event for cloud connector
         on_start = executor_on_start(correlation_id=crc_dispatcher_correlation_id)
         events.addEvent(on_start)
@@ -182,6 +194,7 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
             elapsedTime = time.time() - startTime
             if elapsedTime >= response_interval:
                 # hit the interval, post events
+                _log("Hit the response interval. Posting current status...")
                 returnedEvents = _composeDispatcherMessage(events, return_url, response_to)
                 response = self.dispatcher.Send(returnedEvents)
                 # reset interval timer
@@ -192,15 +205,18 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
             # last event sould be the failure, find the reason
             errorCode, errorDetails = _parseFailure(events[-1])
             if errorCode == "ANSIBLE_PLAYBOOK_NOT_INSTALLED":
-                print("The rhc-worker-playbook package requires the ansible package to be installed.")
+                _log("The rhc-worker-playbook package requires the ansible package to be installed.")
             # required event for cloud connector
             on_failed = executor_on_failed(correlation_id=crc_dispatcher_correlation_id, error_code=errorCode, error_details=errorDetails)
             events.addEvent(on_failed)
 
         # send the final message after playbook completed
+        _log("Playbook run complete.")
+        _log(str(events))
         returnedEvents = _composeDispatcherMessage(events, return_url, response_to)
+        _log("Posting events...")
         response = self.dispatcher.Send(returnedEvents)
-
+        _log("Post complete.")
         return
 
 def serve():
@@ -217,7 +233,7 @@ def serve():
             pid=os.getpid()))
     registered = registrationResponse.registered
     if not registered:
-        print("Could not register rhc-worker-playbook.")
+        _log("Could not register rhc-worker-playbook.")
         sys.exit(1)
     address = registrationResponse.address.replace("@", "unix-abstract:")
 
@@ -226,7 +242,7 @@ def serve():
     try:
         yggdrasil_pb2_grpc.add_WorkerServicer_to_server(WorkerService(dispatcher=dispatcher), server)
     except ValueError as e:
-        print(e)
+        _log(e)
         sys.exit(1)
     server.add_insecure_port(address)
 
