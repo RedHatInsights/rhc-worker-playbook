@@ -259,6 +259,7 @@ def serve():
     if not registered:
         _log("Could not register rhc-worker-playbook.")
         sys.exit(1)
+    _log("Registered rhc-worker-playbook.")
     address = registrationResponse.address.replace("@", "unix-abstract:")
 
     # create server
