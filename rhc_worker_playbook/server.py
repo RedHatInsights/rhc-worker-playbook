@@ -9,6 +9,7 @@ import ansible_runner
 import time
 import json
 import uuid
+from subprocess import Popen, PIPE
 from requests import Request
 from concurrent import futures
 from .protocol import yggdrasil_pb2_grpc, yggdrasil_pb2
@@ -20,6 +21,7 @@ if not YGG_SOCKET_ADDR:
     sys.exit(1)
 # massage the value for python grpc
 YGG_SOCKET_ADDR = YGG_SOCKET_ADDR.replace("unix:@", "unix-abstract:")
+BASIC_PATH = "/sbin:/bin:/usr/sbin:/usr/bin"
 
 # load config file
 _config = {}
@@ -33,29 +35,6 @@ VERIFY_ENABLED = _config.get('verify_playbook', True)
 VERIFY_VERSION_CHECK = _config.get('verify_playbook_version_check', True)
 INSIGHTS_CORE_GPG_CHECK = _config.get('insights_core_gpg_check', True)
 DIRECTIVE = _config.get("directive", "rhc-worker-playbook")
-
-for egg in (STABLE_EGG, RPM_EGG):
-    # prefer stable > rpm
-    try:
-        if not os.path.exists(egg):
-            raise ImportError("Egg %s is unavailable" % egg)
-
-        # gpg verify the egg before adding to path
-        if INSIGHTS_CORE_GPG_CHECK:
-            from insights_client import gpg_validate
-            valid = gpg_validate(egg)
-            if not valid:
-                raise ImportError("Unable to validate %s" % egg)
-
-        sys.path.append(egg)
-        from insights.client.apps.ansible.playbook_verifier import verify, loadPlaybookYaml
-        break
-    except ImportError as e:
-        err = "WARNING: Could not import insights-core: %s" % e
-        print(err)
-        if VERIFY_ENABLED:
-            # if verification is enabled and can't import insights-core, eject
-            raise ImportError(err)
 
 def _newlineDelimited(events):
     '''
@@ -139,10 +118,25 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
             raise Exception("Missing attribute in message: %s" % e)
 
         if VERIFY_ENABLED:
-            playbook = loadPlaybookYaml(playbook_str.decode('utf-8'))
-            # call insights-core lib to verify playbook
-            # don't catch exception - allow it to bubble up to rhcd
-            playbook = verify(playbook, checkVersion=VERIFY_VERSION_CHECK)
+            print("Verifying playbook...")
+            args = ["insights-client", "-m", "insights.client.apps.ansible.playbook_verifier",
+                    "--quiet", "--payload", "noop", "--content-type", "noop"]
+            env = {"PATH": BASIC_PATH}
+            if not INSIGHTS_CORE_GPG_CHECK:
+                args.append("--no-gpg")
+                env["BYPASS_GPG"] = "True"
+            verifyProc = Popen(
+                args,
+                stdin=PIPE, stdout=PIPE, stderr=PIPE,
+                env=env)
+            playbook_str, err = verifyProc.communicate(input=playbook_str)
+
+            if verifyProc.returncode != 0:
+                raise Exception("Unable to verify playbook: %s" % err)
+            # remove this after insights-core fix
+            stripped_pb = playbook_str.decode('utf-8').split("\n", 1)[1]
+            playbook = yaml.safe_load(stripped_pb)
+            print("Playbook verified.")
         else:
             print("WARNING: Playbook verification disabled.")
             playbook = yaml.safe_load(playbook_str.decode('utf-8'))
