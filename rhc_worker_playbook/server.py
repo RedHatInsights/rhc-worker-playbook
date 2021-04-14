@@ -1,6 +1,6 @@
 import sys
 import os
-from .constants import WORKER_LIB_DIR, CONFIG_FILE
+from .constants import WORKER_LIB_DIR, CONFIG_FILE, RPM_EGG, STABLE_EGG
 sys.path.insert(0, WORKER_LIB_DIR)
 import toml
 import yaml
@@ -19,6 +19,30 @@ from .dispatcher_events import executor_on_start, executor_on_failed
 # unbuffered stdout for logging to rhc
 sys.stdout = os.fdopen(sys.stdout.fileno(), 'wb', buffering=0)
 atexit.register(sys.stdout.close)
+
+for egg in (STABLE_EGG, RPM_EGG):
+    # prefer stable > rpm
+    try:
+        if not os.path.exists(egg):
+            raise ImportError("Egg %s is unavailable" % egg)
+
+        # # gpg verify the egg before adding to path
+        # if INSIGHTS_CORE_GPG_CHECK:
+        from insights_client import gpg_validate
+        valid = gpg_validate(egg)
+        if not valid:
+            raise ImportError("Unable to validate %s" % egg)
+
+        sys.path.append(egg)
+        from insights.client.apps.ansible.playbook_verifier import verify, loadPlaybookYaml
+        break
+    except ImportError as e:
+        err = "WARNING: Could not import insights-core: %s" % e
+        _log(err)
+        # if VERIFY_ENABLED:
+        #     # if verification is enabled and can't import insights-core, eject
+        #     raise ImportError(err)
+
 
 YGG_SOCKET_ADDR = os.environ.get('YGG_SOCKET_ADDR')
 if not YGG_SOCKET_ADDR:
