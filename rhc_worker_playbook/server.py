@@ -20,14 +20,19 @@ from .dispatcher_events import executor_on_start, executor_on_failed
 sys.stdout = os.fdopen(sys.stdout.fileno(), 'wb', buffering=0)
 atexit.register(sys.stdout.close)
 
+def _log(message):
+    '''
+    Send message as bytes over unbuffered stdout for
+    RHC to log
+    '''
+    sys.stdout.write((message + '\n').encode())
+
 for egg in (STABLE_EGG, RPM_EGG):
     # prefer stable > rpm
     try:
         if not os.path.exists(egg):
             raise ImportError("Egg %s is unavailable" % egg)
 
-        # # gpg verify the egg before adding to path
-        # if INSIGHTS_CORE_GPG_CHECK:
         from insights_client import gpg_validate
         valid = gpg_validate(egg)
         if not valid:
@@ -36,12 +41,9 @@ for egg in (STABLE_EGG, RPM_EGG):
         sys.path.append(egg)
         from insights.client.apps.ansible.playbook_verifier import verify, loadPlaybookYaml
         break
-    except ImportError as e:
+    except (ImportError, AttributeError) as e:
         err = "WARNING: Could not import insights-core: %s" % e
         _log(err)
-        # if VERIFY_ENABLED:
-        #     # if verification is enabled and can't import insights-core, eject
-        #     raise ImportError(err)
 
 
 YGG_SOCKET_ADDR = os.environ.get('YGG_SOCKET_ADDR')
@@ -110,13 +112,6 @@ def _loadConfig():
         "insights_core_gpg_check": _config.get("insights_core_gpg_check", True)
     }
     return parsedConfig
-
-def _log(message):
-    '''
-    Send message as bytes over unbuffered stdout for
-    RHC to log
-    '''
-    sys.stdout.write((message + '\n').encode())
 
 class Events(list):
     '''
