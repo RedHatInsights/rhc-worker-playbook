@@ -36,6 +36,29 @@ VERIFY_VERSION_CHECK = _config.get('verify_playbook_version_check', True)
 INSIGHTS_CORE_GPG_CHECK = _config.get('insights_core_gpg_check', True)
 DIRECTIVE = _config.get("directive", "rhc-worker-playbook")
 
+for egg in (STABLE_EGG, RPM_EGG):
+    # prefer stable > rpm
+    try:
+        if not os.path.exists(egg):
+            raise ImportError("Egg %s is unavailable" % egg)
+
+        # gpg verify the egg before adding to path
+        if INSIGHTS_CORE_GPG_CHECK:
+            from insights_client import gpg_validate
+            valid = gpg_validate(egg)
+            if not valid:
+                raise ImportError("Unable to validate %s" % egg)
+
+        sys.path.append(egg)
+        from insights.client.apps.ansible.playbook_verifier import verify, loadPlaybookYaml
+        break
+    except ImportError as e:
+        err = "WARNING: Could not import insights-core: %s" % e
+        print(err)
+        if VERIFY_ENABLED:
+            # if verification is enabled and can't import insights-core, eject
+            raise ImportError(err)
+
 def _newlineDelimited(events):
     '''
     Dump a list into a newline-delimited JSON format
