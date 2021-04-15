@@ -163,9 +163,7 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
                 (stdout.decode("utf-8"), stderr.decode("utf-8")))
                 raise Exception()
             verified = stdout.decode("utf-8")
-            # remove this after insights-core fix
-            stripped_pb = verified.split("\n", 1)[1]
-            playbook = yaml.safe_load(stripped_pb)
+            playbook = yaml.safe_load(verified)
             _log("Playbook verified")
         else:
             _log("WARNING: Playbook verification disabled.")
