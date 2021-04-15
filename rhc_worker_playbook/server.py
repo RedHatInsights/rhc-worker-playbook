@@ -27,24 +27,7 @@ def _log(message):
     '''
     sys.stdout.write((message + '\n').encode())
 
-for egg in (STABLE_EGG, RPM_EGG):
-    # prefer stable > rpm
-    try:
-        if not os.path.exists(egg):
-            raise ImportError("Egg %s is unavailable" % egg)
-
-        from insights_client import gpg_validate
-        valid = gpg_validate(egg)
-        if not valid:
-            raise ImportError("Unable to validate %s" % egg)
-
-        sys.path.append(egg)
-        from insights.client.apps.ansible.playbook_verifier import verify, loadPlaybookYaml
-        break
-    except (ImportError, AttributeError) as e:
-        err = "WARNING: Could not import insights-core: %s" % e
-        _log(err)
-
+time.sleep(5)
 
 YGG_SOCKET_ADDR = os.environ.get('YGG_SOCKET_ADDR')
 if not YGG_SOCKET_ADDR:
@@ -174,17 +157,19 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
                 args,
                 stdin=PIPE, stdout=PIPE, stderr=PIPE,
                 env=env)
-            playbook_str, err = verifyProc.communicate(input=playbook_str)
-
+            stdout, stderr = verifyProc.communicate(input=playbook_str)
             if verifyProc.returncode != 0:
-                raise Exception("Unable to verify playbook: %s" % err)
+                _log("Unable to verify playbook:\n%s\n%s" %
+                (stdout.decode("utf-8"), stderr.decode("utf-8")))
+                raise Exception()
+            verified = stdout.decode("utf-8")
             # remove this after insights-core fix
-            stripped_pb = playbook_str.decode('utf-8').split("\n", 1)[1]
+            stripped_pb = verified.split("\n", 1)[1]
             playbook = yaml.safe_load(stripped_pb)
             _log("Playbook verified")
         else:
             _log("WARNING: Playbook verification disabled.")
-            playbook = yaml.safe_load(playbook_str.decode('utf-8'))
+            playbook = yaml.safe_load(playbook_str)
 
         for item in playbook:
             # remove signature field, ansible-runner dislikes bytes
