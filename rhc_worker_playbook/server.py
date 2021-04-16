@@ -184,11 +184,16 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
                 (stdout.decode("utf-8"), stderr.decode("utf-8")))
                 raise Exception
             verified = stdout.decode("utf-8")
-            playbook = yaml.safe_load(verified)
             _log("Playbook verified")
         else:
             _log("WARNING: Playbook verification disabled.")
-            playbook = yaml.safe_load(playbook_str)
+            verified = playbook_str.decode("utf-8")
+        try:
+            playbook = yaml.safe_load(verified)
+        except yaml.composer.ComposerError as e:
+            _log("ERROR: Could not parse playbook")
+            _log(str(e))
+            raise
 
         for item in playbook:
             # remove signature field, ansible-runner dislikes bytes
