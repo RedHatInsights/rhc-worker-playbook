@@ -1,6 +1,6 @@
 import sys
 import os
-from .constants import WORKER_LIB_DIR, CONFIG_FILE, RPM_EGG, STABLE_EGG
+from .constants import WORKER_LIB_DIR, CONFIG_FILE
 sys.path.insert(0, WORKER_LIB_DIR)
 import toml
 import yaml
@@ -27,6 +27,8 @@ def _log(message):
     '''
     sys.stdout.write((message + '\n').encode())
 
+# for some reason, without a short delay, RHC connects too quickly
+#   and cloud connector service can't see it
 time.sleep(5)
 
 YGG_SOCKET_ADDR = os.environ.get('YGG_SOCKET_ADDR')
@@ -96,6 +98,7 @@ def _loadConfig():
     }
     return parsedConfig
 
+
 class Events(list):
     '''
     Extension of list to receive ansible-runner events
@@ -117,7 +120,8 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
     def __init__(self, *args, **kwargs):
         dispatcher = kwargs.get('dispatcher', None)
         if not dispatcher:
-            raise ValueError('No dispatcher parameter was provided to the WorkerService')
+            _log('No dispatcher parameter was provided to the WorkerService')
+            raise Exception
         self.dispatcher = dispatcher
 
     def Send(self, request, context):
@@ -137,11 +141,28 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
             playbook_str = request.content
             response_to = request.message_id
             crc_dispatcher_correlation_id = request.metadata.get('crc_dispatcher_correlation_id')
-            response_interval = float(request.metadata.get('response_interval'))
+            response_interval = request.metadata.get('response_interval')
             return_url = request.metadata.get('return_url')
         except LookupError as e:
-            # raise exception to bubble up to rhcd
-            raise Exception("Missing attribute in message: %s" % e)
+            _log("ERROR: Missing attribute in message: %s" % e)
+            raise
+
+        if not crc_dispatcher_correlation_id:
+            _log("WARNING: No crc_dispatcher_correlation_id")
+
+        if not return_url:
+            _log("WARNING: No return_url")
+
+        if not response_interval:
+            _log("WARNING: No response_interval. Defaulting to 300")
+            response_interval = 300
+        else:
+            try:
+                response_interval = float(response_interval)
+            except (TypeError, ValueError) as e:
+                _log("ERROR: Invalid response_interval")
+                _log(str(e))
+                raise
 
         if config["verify_playbook"]:
             _log("Verifying playbook...")
@@ -159,9 +180,9 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
                 env=env)
             stdout, stderr = verifyProc.communicate(input=playbook_str)
             if verifyProc.returncode != 0:
-                _log("Unable to verify playbook:\n%s\n%s" %
+                _log("ERROR: Unable to verify playbook:\n%s\n%s" %
                 (stdout.decode("utf-8"), stderr.decode("utf-8")))
-                raise Exception()
+                raise Exception
             verified = stdout.decode("utf-8")
             playbook = yaml.safe_load(verified)
             _log("Playbook verified")
@@ -207,7 +228,7 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
             # last event sould be the failure, find the reason
             errorCode, errorDetails = _parseFailure(events[-1])
             if errorCode == "ANSIBLE_PLAYBOOK_NOT_INSTALLED":
-                _log("The rhc-worker-playbook package requires the ansible package to be installed.")
+                _log("WARNING: The rhc-worker-playbook package requires the ansible package to be installed.")
             # required event for cloud connector
             on_failed = executor_on_failed(correlation_id=crc_dispatcher_correlation_id, error_code=errorCode, error_details=errorDetails)
             events.addEvent(on_failed)
@@ -235,7 +256,7 @@ def serve():
             pid=os.getpid()))
     registered = registrationResponse.registered
     if not registered:
-        _log("Could not register rhc-worker-playbook.")
+        _log("ERROR: Could not register rhc-worker-playbook.")
         sys.exit(1)
     _log("Registered rhc-worker-playbook.")
     address = registrationResponse.address.replace("@", "unix-abstract:")
@@ -245,8 +266,8 @@ def serve():
     try:
         yggdrasil_pb2_grpc.add_WorkerServicer_to_server(WorkerService(dispatcher=dispatcher), server)
     except ValueError as e:
-        _log(e)
-        sys.exit(1)
+        _log(str(e))
+        raise
     server.add_insecure_port(address)
 
     # off to the races
