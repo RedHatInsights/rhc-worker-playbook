@@ -254,6 +254,7 @@ def serve():
     # open the channel to ygg Dispatcher
     channel = grpc.insecure_channel(YGG_SOCKET_ADDR)
     dispatcher = yggdrasil_pb2_grpc.DispatcherStub(channel)
+    _log("Registering with directive %s..." %s config["directive"])
     registrationResponse = dispatcher.Register(
         yggdrasil_pb2.RegistrationRequest(
             handler=config["directive"],
