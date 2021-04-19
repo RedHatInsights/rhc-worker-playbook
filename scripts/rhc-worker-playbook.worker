@@ -1,0 +1,7 @@
+#!/usr/libexec/platform-python
+import sys
+sys.path.insert(1, "/usr/lib/python3.6/site-packages")
+from rhc_worker_playbook import server
+
+if __name__ == '__main__':
+    server.serve()

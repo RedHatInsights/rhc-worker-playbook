@@ -35,11 +35,11 @@ export GRPC_PYTHON_BUILD_SYSTEM_CARES=True
 export GRPC_PYTHON_DISABLE_LIBC_COMPATIBILITY=True
 %define rhc_config_dir $(pkg-config rhc --variable workerconfdir)
 
-%{__make} PREFIX=%{_prefix} LIBDIR=%{_libdir} installed-lib-dir CONFIG_DIR=%{rhc_config_dir}
+%{__make} PREFIX=%{_prefix} LIBDIR=%{_libdir} CONFIG_DIR=%{rhc_config_dir} PYTHON_PKGDIR=%{python3_sitelib} installed-lib-dir
 %{make_build} build
 
 %install
-%{make_install} PREFIX=%{_prefix} LIBDIR=%{_libdir} CONFIG_DIR=%{rhc_config_dir}
+%{make_install} PREFIX=%{_prefix} LIBDIR=%{_libdir} CONFIG_DIR=%{rhc_config_dir} PYTHON_PKGDIR=%{python3_sitelib}
 
 %files
 %{_libexecdir}/rhc/rhc-worker-playbook.worker

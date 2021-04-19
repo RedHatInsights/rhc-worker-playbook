@@ -2,7 +2,7 @@ import setuptools
 
 setuptools.setup(
     name="rhc-worker-playbook",
-    version="0.1.4",
+    version="0.1.5",
     author="Jeremy Crafts",
     author_email="jcrafts@redhat.com",
     description="Python worker for RHC",
@@ -10,6 +10,8 @@ setuptools.setup(
     url="https://github.com/RedHatInsights/rhc-ansible-worker",
     packages=setuptools.find_packages(),
     python_requires='>=3.6',
-    entry_points={'console_scripts': ['rhc-worker-playbook.worker = rhc_worker_playbook.server:serve']},
+    scripts=[
+        "scripts/rhc-worker-playbook.worker"
+    ],
     zip_safe = False,
 )
