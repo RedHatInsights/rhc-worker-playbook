@@ -184,7 +184,7 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
                 (stdout.decode("utf-8"), stderr.decode("utf-8")))
                 raise Exception
             verified = stdout.decode("utf-8")
-            _log("Playbook verified")
+            _log("Playbook verified.")
         else:
             _log("WARNING: Playbook verification disabled.")
             verified = playbook_str.decode("utf-8")
