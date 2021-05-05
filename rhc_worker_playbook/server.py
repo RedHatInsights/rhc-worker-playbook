@@ -10,6 +10,7 @@ import time
 import json
 import uuid
 import atexit
+import asyncio
 from subprocess import Popen, PIPE
 from requests import Request
 from concurrent import futures
@@ -128,9 +129,13 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
         '''
         Act on messages sent to the WorkerService
         '''
-        # we have received it
-        yggdrasil_pb2.Receipt()
 
+        loop = asyncio.new_event_loop()
+        loop.run_until_complete(self._run_data(request))
+
+        return yggdrasil_pb2.Receipt()
+
+    async def _run_data(self, request):
         # load configuration
         config = _loadConfig()
 
@@ -245,7 +250,6 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
         _log("Posting events...")
         response = self.dispatcher.Send(returnedEvents)
         _log("Post complete.")
-        return
 
 def serve():
     # load config to get directive
