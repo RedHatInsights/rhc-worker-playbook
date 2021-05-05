@@ -10,6 +10,7 @@ import time
 import json
 import uuid
 import atexit
+from threading import Thread
 from subprocess import Popen, PIPE
 from requests import Request
 from concurrent import futures
@@ -128,9 +129,16 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
         '''
         Act on messages sent to the WorkerService
         '''
-        # we have received it
-        yggdrasil_pb2.Receipt()
+        # start the worker thread
+        worker_thread = Thread(target=self._do_work, args=(request, context))
+        worker_thread.start()
+        # let them know we have received it
+        return yggdrasil_pb2.Receipt()
 
+    def _do_work(self, request, context):
+        '''
+        Do the actual work of calling ansible and everything else
+        '''
         # load configuration
         config = _loadConfig()
 
