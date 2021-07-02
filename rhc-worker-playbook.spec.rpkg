@@ -21,7 +21,7 @@ BuildRequires: c-ares-devel
 BuildRequires: zlib-devel
 BuildRequires: python3dist(cython)
 BuildRequires: gcc
-BuildRequires: g++
+BuildRequires: gcc-c++
 
 %description
 Python-based worker for Red Hat connect, used to launch Ansible playbooks via Ansible Runner.
