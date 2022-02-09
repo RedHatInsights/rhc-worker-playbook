@@ -1,6 +1,6 @@
 import sys
 import os
-from .constants import WORKER_LIB_DIR, CONFIG_FILE
+from .constants import WORKER_LIB_DIR, CONFIG_FILE, ANSIBLE_COLLECTIONS_PATHS
 sys.path.insert(0, WORKER_LIB_DIR)
 import toml
 import yaml
@@ -38,7 +38,7 @@ if not YGG_SOCKET_ADDR:
 # massage the value for python grpc
 YGG_SOCKET_ADDR = YGG_SOCKET_ADDR.replace("unix:@", "unix-abstract:")
 BASIC_PATH = "/sbin:/bin:/usr/sbin:/usr/bin"
-ANSIBLE_COLLECTIONS_PATHS="/usr/share/rhc-worker-playbook/ansible/collections/ansible_collections/"
+
 
 def _newlineDelimited(events):
     '''
@@ -213,8 +213,8 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
         runnerThread, runner = ansible_runner.interface.run_async(
             playbook=playbook,
             envvars={"PYTHONPATH": WORKER_LIB_DIR,
-                    "PATH": BASIC_PATH,
-                    "ANSIBLE_COLLECTIONS_PATHS": ANSIBLE_COLLECTIONS_PATHS},
+                     "PATH": BASIC_PATH,
+                     "ANSIBLE_COLLECTIONS_PATHS": ANSIBLE_COLLECTIONS_PATHS},
             event_handler=events.addEvent,
             quiet=True)
 
