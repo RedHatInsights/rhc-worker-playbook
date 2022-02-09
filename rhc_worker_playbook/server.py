@@ -38,6 +38,7 @@ if not YGG_SOCKET_ADDR:
 # massage the value for python grpc
 YGG_SOCKET_ADDR = YGG_SOCKET_ADDR.replace("unix:@", "unix-abstract:")
 BASIC_PATH = "/sbin:/bin:/usr/sbin:/usr/bin"
+ANSIBLE_COLLECTIONS_PATHS="/usr/share/rhc-worker-playbook/ansible/collections/ansible_collections/"
 
 def _newlineDelimited(events):
     '''
@@ -211,7 +212,9 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
         # run playbook
         runnerThread, runner = ansible_runner.interface.run_async(
             playbook=playbook,
-            envvars={"PYTHONPATH": WORKER_LIB_DIR, "PATH": BASIC_PATH},
+            envvars={"PYTHONPATH": WORKER_LIB_DIR,
+                    "PATH": BASIC_PATH,
+                    "ANSIBLE_COLLECTIONS_PATHS": ANSIBLE_COLLECTIONS_PATHS},
             event_handler=events.addEvent,
             quiet=True)
 
