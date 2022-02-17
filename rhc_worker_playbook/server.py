@@ -1,6 +1,12 @@
 import sys
 import os
-from .constants import WORKER_LIB_DIR, CONFIG_FILE, ANSIBLE_COLLECTIONS_PATHS
+from .constants import (
+    WORKER_LIB_DIR,
+    CONFIG_FILE,
+    ANSIBLE_COLLECTIONS_PATHS,
+    RUNNER_ARTIFACTS_DIR,
+    RUNNER_ROTATE_ARTIFACTS
+)
 sys.path.insert(0, WORKER_LIB_DIR)
 import toml
 import yaml
@@ -216,7 +222,9 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
                      "PATH": BASIC_PATH,
                      "ANSIBLE_COLLECTIONS_PATHS": ANSIBLE_COLLECTIONS_PATHS},
             event_handler=events.addEvent,
-            quiet=True)
+            quiet=True,
+            artifact_dir=RUNNER_ARTIFACTS_DIR,
+            rotate_artifacts=RUNNER_ROTATE_ARTIFACTS)
 
         # initialize elapsed counter
         elapsedTime = 0
