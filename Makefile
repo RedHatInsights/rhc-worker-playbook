@@ -46,4 +46,3 @@ uninstall:
 	rm -rf $(LIBDIR)/python*/site-packages/$(PKGNAME)*
 	rm -rf $(LIBDIR)/$(PKGNAME)
 .PHONY: clean
-

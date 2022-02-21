@@ -27,6 +27,7 @@ from .dispatcher_events import executor_on_start, executor_on_failed
 sys.stdout = os.fdopen(sys.stdout.fileno(), 'wb', buffering=0)
 atexit.register(sys.stdout.close)
 
+
 def _log(message):
     '''
     Send message as bytes over unbuffered stdout for
@@ -56,6 +57,7 @@ def _newlineDelimited(events):
         output += json.dumps(e) + '\n'
     return output
 
+
 def _generateRequest(events, return_url):
     '''
     Generate the HTTP request
@@ -65,6 +67,7 @@ def _generateRequest(events, return_url):
         "file": ("runner-events", _newlineDelimited(events), "application/vnd.redhat.playbook.v1+jsonl"),
         "metadata": "{}"
     }).prepare()
+
 
 def _composeDispatcherMessage(events, return_url, response_to):
     '''
@@ -78,6 +81,7 @@ def _composeDispatcherMessage(events, return_url, response_to):
         metadata=req.headers,
         response_to=response_to)
 
+
 def _parseFailure(event):
     '''
     Generate the error code and details from the failure event
@@ -88,6 +92,7 @@ def _parseFailure(event):
         errorCode = "ANSIBLE_PLAYBOOK_NOT_INSTALLED"
     # TODO: enumerate more failure types
     return errorCode, errorDetails
+
 
 def _loadConfig():
     # load config file
@@ -180,10 +185,11 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
             _log("Verifying playbook...")
             # --payload here will be a no-op because no upload is performed when using the verifier
             #   but, it will allow us to update the egg!
-            args = ["insights-client", "-m", "insights.client.apps.ansible.playbook_verifier",
+            args = ["insights-client",
+                    "-m", "insights.client.apps.ansible.playbook_verifier",
                     "--quiet", "--payload", "noop", "--content-type", "noop"]
             env = {"PATH": BASIC_PATH}
-            if config["insights_core_gpg_check"] == False:
+            if not config["insights_core_gpg_check"]:
                 args.append("--no-gpg")
                 env["BYPASS_GPG"] = "True"
             verifyProc = Popen(
@@ -192,8 +198,10 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
                 env=env)
             stdout, stderr = verifyProc.communicate(input=playbook_str)
             if verifyProc.returncode != 0:
-                _log("ERROR: Unable to verify playbook:\n%s\n%s" %
-                (stdout.decode("utf-8"), stderr.decode("utf-8")))
+                _log(
+                    "ERROR: Unable to verify playbook:\n%s\n%s" %
+                    (stdout.decode("utf-8"), stderr.decode("utf-8"))
+                )
                 raise Exception
             verified = stdout.decode("utf-8")
             _log("Playbook verified.")
@@ -261,6 +269,7 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
         _log("Posting events...")
         response = self.dispatcher.Send(returnedEvents)
         _log("Post complete.")
+
 
 def serve():
     # load config to get directive

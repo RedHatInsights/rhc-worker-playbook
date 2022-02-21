@@ -1,0 +1,20 @@
+---
+py36-linters:
+  image: python:3.6
+  stage: test
+  tags:
+    - docker
+    - shared
+  script:
+    - python3 -m pip install tox
+    - tox -elinters
+
+py39-linters:
+  image: python:3.9
+  stage: test
+  tags:
+    - docker
+    - shared
+  script:
+    - python3 -m pip install tox
+    - tox -elinters

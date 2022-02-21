@@ -13,5 +13,5 @@ setuptools.setup(
     scripts=[
         "scripts/rhc-worker-playbook.worker"
     ],
-    zip_safe = False,
+    zip_safe=False,
 )

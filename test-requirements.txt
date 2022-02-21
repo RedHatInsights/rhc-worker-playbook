@@ -1,0 +1,5 @@
+pre-commit>=2.16.0 # MIT
+
+grpcio==1.38.1 # Apache-2.0
+grpcio-tools==1.38.1 # Apache-2.0
+ansible-runner==2.1.1 # Apacahe-2.0
