@@ -10,7 +10,7 @@ SYSCONFDIR	?= $(PREFIX)/etc
 PYTHON		?= python3
 CONFIG_DIR	?= $(SYSCONFDIR)/rhc/workers
 CONFIG_FILE	?= $(CONFIG_DIR)/rhc-worker-playbook.toml
-PYTHON_PKGDIR ?= $(LIBDIR)/python3.6/site-packages
+PYTHON_PKGDIR ?= $(shell /usr/libexec/platform-python -Ic "from distutils.sysconfig import get_python_lib; print(get_python_lib())")
 
 .PHONY: tarball
 tarball: $(TARBALL)
