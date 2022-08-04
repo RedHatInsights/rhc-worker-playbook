@@ -243,6 +243,7 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
         elapsedTime = 0
         startTime = time.time()
         while runnerThread.is_alive():
+            time.sleep(1)
             elapsedTime = time.time() - startTime
             if elapsedTime >= response_interval:
                 # hit the interval, post events
