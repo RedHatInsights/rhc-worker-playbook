@@ -239,20 +239,14 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
             artifact_dir=RUNNER_ARTIFACTS_DIR,
             rotate_artifacts=RUNNER_ROTATE_ARTIFACTS)
 
-        # initialize elapsed counter
-        elapsedTime = 0
-        startTime = time.time()
+        # wait for the thread to finish
         while runnerThread.is_alive():
-            time.sleep(1)
-            elapsedTime = time.time() - startTime
-            if elapsedTime >= response_interval:
+            runnerThread.join(response_interval)
+            if runnerThread.is_alive():
                 # hit the interval, post events
                 _log("Hit the response interval. Posting current status...")
                 returnedEvents = _composeDispatcherMessage(events, return_url, response_to)
                 response = self.dispatcher.Send(returnedEvents)
-                # reset interval timer
-                elapsedTime = 0
-                startTime = time.time()
 
         if runner.status == 'failed':
             # last event sould be the failure, find the reason
