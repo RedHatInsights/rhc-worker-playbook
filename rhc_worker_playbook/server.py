@@ -17,6 +17,7 @@ import json
 import uuid
 import atexit
 import asyncio
+import functools
 from subprocess import Popen, PIPE
 from requests import Request
 from concurrent import futures
@@ -143,11 +144,11 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
         '''
 
         loop = asyncio.new_event_loop()
-        loop.run_until_complete(self._run_data(request))
+        loop.run_in_executor(executor=None, func=functools.partial(self._run_data, request))
 
         return yggdrasil_pb2.Receipt()
 
-    async def _run_data(self, request):
+    def _run_data(self, request):
         # load configuration
         config = _loadConfig()
 
