@@ -233,6 +233,7 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
         runnerThread, runner = ansible_runner.interface.run_async(
             playbook=playbook,
             envvars={"PYTHONPATH": WORKER_LIB_DIR,
+                     "PYTHONDONTWRITEBYTECODE": "1",
                      "PATH": BASIC_PATH,
                      "ANSIBLE_COLLECTIONS_PATHS": ANSIBLE_COLLECTIONS_PATHS},
             event_handler=events.addEvent,
