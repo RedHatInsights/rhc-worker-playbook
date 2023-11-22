@@ -7,17 +7,13 @@ playbooks dispatched through `yggd`, executes them on the localhost using
 [ingress](https://console.redhat.com/docs/api/ingress) service.
 
 
-# Reporting Bugs
+## Reporting Bugs
 
 `rhc-worker-playbook` is included as part of Red Hat Enterprise Linux 8 and
 newer. Please report any issues with rhc-worker-playbook against the
-`rhc-worker-playbook` component of the appropriate Red Hat Enterprise Linux
-product.
-
-* [Link to new bug report for Red Hat Enterprise Linux 8](https://bugzilla.redhat.com/enter_bug.cgi?product=Red%20Hat%20Enterprise%20Linux%208&component=rhc-worker-playbook)
-* [Link to new bug report for Red Hat Enterprise Linux 9](https://bugzilla.redhat.com/enter_bug.cgi?product=Red%20Hat%20Enterprise%20Linux%209&component=rhc-worker-playbook)
+`rhc-worker-playbook` component on [Red Hat Jira](https://issues.redhat.com/secure/CreateIssueDetails!init.jspa?pid=12332745&issuetype=1&components=12381929).
 
 
-# How to contribute
+## How to contribute
 
 For develop and contribution follow the [CONTRIBUTING](https://github.com/RedHatInsights/rhc-worker-playbook/blob/main/CONTRIBUTING.md) guide
