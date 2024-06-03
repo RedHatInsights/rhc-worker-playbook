@@ -52,6 +52,17 @@ find -type f ! -executable -name '*.py' -print -exec sed -i -e '1{\@^#!.*@d}' '{
 find -type f -name '.gitignore' -print -delete
 popd
 
+# Only apply this patch when using Fedora or EL10 (Cython 3)
+%if 0%{?fedora} || 0%{?rhel} >= 10
+pushd vendor
+tar -zxf grpcio-1.48.2.tar.gz
+pushd grpcio-1.48.2
+patch -p1 < ../0001-Specify-noexcept-for-cdef-functions.patch
+popd
+tar -czf grpcio-1.48.2.tar.gz grpcio-1.48.2
+popd
+%endif
+
 %build
 export GRPC_PYTHON_BUILD_WITH_CYTHON=True
 export GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=True
