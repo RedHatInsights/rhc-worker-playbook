@@ -3,12 +3,12 @@
 %define ansible_posix_version 1.3.0
 
 Name:       rhc-worker-playbook
-Version:    0.1.8
+Version:    0.1.9
 Release:    0%{?dist}
 Summary:    Python worker for Red Hat connector that launches Ansible Runner
 License:    GPL-2.0-or-later
 URL:        https://github.com/redhatinsights/rhc-worker-playbook
-Source:     rhc-worker-playbook-0.1.8.tar.gz
+Source:     rhc-worker-playbook-%{version}.tar.gz
 Source1:    https://github.com/ansible-collections/community.general/archive/%{community_general_version}/ansible-collection-community-general-%{community_general_version}.tar.gz
 Source2:    https://github.com/ansible-collections/ansible.posix/archive/%{ansible_posix_version}/ansible-collection-ansible-posix-%{ansible_posix_version}.tar.gz
 
