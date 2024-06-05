@@ -5,8 +5,9 @@ from .constants import (
     CONFIG_FILE,
     ANSIBLE_COLLECTIONS_PATHS,
     RUNNER_ARTIFACTS_DIR,
-    RUNNER_ROTATE_ARTIFACTS
+    RUNNER_ROTATE_ARTIFACTS,
 )
+
 sys.path.insert(0, WORKER_LIB_DIR)
 import toml
 import yaml
@@ -25,22 +26,23 @@ from .protocol import yggdrasil_pb2_grpc, yggdrasil_pb2
 from .dispatcher_events import executor_on_start, executor_on_failed
 
 # unbuffered stdout for logging to rhc
-sys.stdout = os.fdopen(sys.stdout.fileno(), 'wb', buffering=0)
+sys.stdout = os.fdopen(sys.stdout.fileno(), "wb", buffering=0)
 atexit.register(sys.stdout.close)
 
 
 def _log(message):
-    '''
+    """
     Send message as bytes over unbuffered stdout for
     RHC to log
-    '''
-    sys.stdout.write((message + '\n').encode())
+    """
+    sys.stdout.write((message + "\n").encode())
+
 
 # for some reason, without a short delay, RHC connects too quickly
 #   and cloud connector service can't see it
 time.sleep(5)
 
-YGG_SOCKET_ADDR = os.environ.get('YGG_SOCKET_ADDR')
+YGG_SOCKET_ADDR = os.environ.get("YGG_SOCKET_ADDR")
 if not YGG_SOCKET_ADDR:
     _log("Missing YGG_SOCKET_ADDR environment variable")
     sys.exit(1)
@@ -50,46 +52,58 @@ BASIC_PATH = "/sbin:/bin:/usr/sbin:/usr/bin"
 
 
 def _newlineDelimited(events):
-    '''
+    """
     Dump a list into a newline-delimited JSON format
-    '''
-    output = ''
+    """
+    output = ""
     for e in events:
-        output += json.dumps(e) + '\n'
+        output += json.dumps(e) + "\n"
     return output
 
 
 def _generateRequest(events, return_url):
-    '''
+    """
     Generate the HTTP request
-    '''
+    """
     # TODO?: generate by hand so request isn't a dependency
-    return Request('POST', return_url, files={
-        "file": ("runner-events", _newlineDelimited(events), "application/vnd.redhat.playbook.v1+jsonl"),
-        "metadata": "{}"
-    }).prepare()
+    return Request(
+        "POST",
+        return_url,
+        files={
+            "file": (
+                "runner-events",
+                _newlineDelimited(events),
+                "application/vnd.redhat.playbook.v1+jsonl",
+            ),
+            "metadata": "{}",
+        },
+    ).prepare()
 
 
 def _composeDispatcherMessage(events, return_url, response_to):
-    '''
+    """
     Create the message with event data to send back to Dispatcher
-    '''
+    """
     req = _generateRequest(events, return_url)
     return yggdrasil_pb2.Data(
-        message_id=str(uuid.uuid4()).encode('utf-8'),
+        message_id=str(uuid.uuid4()).encode("utf-8"),
         content=req.body,
         directive=return_url,
         metadata=req.headers,
-        response_to=response_to)
+        response_to=response_to,
+    )
 
 
 def _parseFailure(event):
-    '''
+    """
     Generate the error code and details from the failure event
-    '''
+    """
     errorCode = "UNDEFINED_ERROR"
-    errorDetails = event.get('stdout')
-    if "The command was not found or was not executable: ansible-playbook" in errorDetails:
+    errorDetails = event.get("stdout")
+    if (
+        "The command was not found or was not executable: ansible-playbook"
+        in errorDetails
+    ):
         errorCode = "ANSIBLE_PLAYBOOK_NOT_INSTALLED"
     # TODO: enumerate more failure types
     return errorCode, errorDetails
@@ -107,16 +121,19 @@ def _loadConfig():
     parsedConfig = {
         "directive": _config.get("directive", "rhc-worker-playbook"),
         "verify_playbook": _config.get("verify_playbook", True),
-        "verify_playbook_version_check": _config.get("verify_playbook_version_check", True),
-        "insights_core_gpg_check": _config.get("insights_core_gpg_check", True)
+        "verify_playbook_version_check": _config.get(
+            "verify_playbook_version_check", True
+        ),
+        "insights_core_gpg_check": _config.get("insights_core_gpg_check", True),
     }
     return parsedConfig
 
 
 class Events(list):
-    '''
+    """
     Extension of list to receive ansible-runner events
-    '''
+    """
+
     def __init__(self):
         pass
 
@@ -132,19 +149,21 @@ class Events(list):
 class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
 
     def __init__(self, *args, **kwargs):
-        dispatcher = kwargs.get('dispatcher', None)
+        dispatcher = kwargs.get("dispatcher", None)
         if not dispatcher:
-            _log('No dispatcher parameter was provided to the WorkerService')
+            _log("No dispatcher parameter was provided to the WorkerService")
             raise Exception
         self.dispatcher = dispatcher
 
     def Send(self, request, context):
-        '''
+        """
         Act on messages sent to the WorkerService
-        '''
+        """
 
         loop = asyncio.new_event_loop()
-        loop.run_in_executor(executor=None, func=functools.partial(self._run_data, request))
+        loop.run_in_executor(
+            executor=None, func=functools.partial(self._run_data, request)
+        )
 
         return yggdrasil_pb2.Receipt()
 
@@ -158,9 +177,11 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
             # required fields
             playbook_str = request.content
             response_to = request.message_id
-            crc_dispatcher_correlation_id = request.metadata.get('crc_dispatcher_correlation_id')
-            response_interval = request.metadata.get('response_interval')
-            return_url = request.metadata.get('return_url')
+            crc_dispatcher_correlation_id = request.metadata.get(
+                "crc_dispatcher_correlation_id"
+            )
+            response_interval = request.metadata.get("response_interval")
+            return_url = request.metadata.get("return_url")
         except LookupError as e:
             _log("ERROR: Missing attribute in message: %s" % e)
             raise
@@ -186,22 +207,26 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
             _log("Verifying playbook...")
             # --payload here will be a no-op because no upload is performed when using the verifier
             #   but, it will allow us to update the egg!
-            args = ["insights-client",
-                    "-m", "insights.client.apps.ansible.playbook_verifier",
-                    "--quiet", "--payload", "noop", "--content-type", "noop"]
+            args = [
+                "insights-client",
+                "-m",
+                "insights.client.apps.ansible.playbook_verifier",
+                "--quiet",
+                "--payload",
+                "noop",
+                "--content-type",
+                "noop",
+            ]
             env = {"PATH": BASIC_PATH}
             if not config["insights_core_gpg_check"]:
                 args.append("--no-gpg")
                 env["BYPASS_GPG"] = "True"
-            verifyProc = Popen(
-                args,
-                stdin=PIPE, stdout=PIPE, stderr=PIPE,
-                env=env)
+            verifyProc = Popen(args, stdin=PIPE, stdout=PIPE, stderr=PIPE, env=env)
             stdout, stderr = verifyProc.communicate(input=playbook_str)
             if verifyProc.returncode != 0:
                 _log(
-                    "ERROR: Unable to verify playbook:\n%s\n%s" %
-                    (stdout.decode("utf-8"), stderr.decode("utf-8"))
+                    "ERROR: Unable to verify playbook:\n%s\n%s"
+                    % (stdout.decode("utf-8"), stderr.decode("utf-8"))
                 )
                 raise Exception
             verified = stdout.decode("utf-8")
@@ -219,7 +244,7 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
         for item in playbook:
             # remove signature field, ansible-runner dislikes bytes
             try:
-                item.get('vars', {}).pop('insights_signature', None)
+                item.get("vars", {}).pop("insights_signature", None)
             except AttributeError:
                 # vars was null/empty
                 pass
@@ -232,14 +257,17 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
         # run playbook
         runnerThread, runner = ansible_runner.interface.run_async(
             playbook=playbook,
-            envvars={"PYTHONPATH": WORKER_LIB_DIR,
-                     "PYTHONDONTWRITEBYTECODE": "1",
-                     "PATH": BASIC_PATH,
-                     "ANSIBLE_COLLECTIONS_PATHS": ANSIBLE_COLLECTIONS_PATHS},
+            envvars={
+                "PYTHONPATH": WORKER_LIB_DIR,
+                "PYTHONDONTWRITEBYTECODE": "1",
+                "PATH": BASIC_PATH,
+                "ANSIBLE_COLLECTIONS_PATHS": ANSIBLE_COLLECTIONS_PATHS,
+            },
             event_handler=events.addEvent,
             quiet=True,
             artifact_dir=RUNNER_ARTIFACTS_DIR,
-            rotate_artifacts=RUNNER_ROTATE_ARTIFACTS)
+            rotate_artifacts=RUNNER_ROTATE_ARTIFACTS,
+        )
 
         # wait for the thread to finish
         while runnerThread.is_alive():
@@ -247,16 +275,24 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
             if runnerThread.is_alive():
                 # hit the interval, post events
                 _log("Hit the response interval. Posting current status...")
-                returnedEvents = _composeDispatcherMessage(events, return_url, response_to)
-                response = self.dispatcher.Send(returnedEvents)
+                returnedEvents = _composeDispatcherMessage(
+                    events, return_url, response_to
+                )
+                self.dispatcher.Send(returnedEvents)
 
-        if runner.status == 'failed':
+        if runner.status == "failed":
             # last event sould be the failure, find the reason
             errorCode, errorDetails = _parseFailure(events[-1])
             if errorCode == "ANSIBLE_PLAYBOOK_NOT_INSTALLED":
-                _log("WARNING: The rhc-worker-playbook package requires the ansible package to be installed.")
+                _log(
+                    "WARNING: The rhc-worker-playbook package requires the ansible package to be installed."
+                )
             # required event for cloud connector
-            on_failed = executor_on_failed(correlation_id=crc_dispatcher_correlation_id, error_code=errorCode, error_details=errorDetails)
+            on_failed = executor_on_failed(
+                correlation_id=crc_dispatcher_correlation_id,
+                error_code=errorCode,
+                error_details=errorDetails,
+            )
             events.addEvent(on_failed)
 
         # send the final message after playbook completed
@@ -264,7 +300,7 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
         _log(str(events))
         returnedEvents = _composeDispatcherMessage(events, return_url, response_to)
         _log("Posting events...")
-        response = self.dispatcher.Send(returnedEvents)
+        self.dispatcher.Send(returnedEvents)
         _log("Post complete.")
 
 
@@ -278,9 +314,9 @@ def serve():
     _log("Registering with directive %s..." % config["directive"])
     registrationResponse = dispatcher.Register(
         yggdrasil_pb2.RegistrationRequest(
-            handler=config["directive"],
-            detached_content=True,
-            pid=os.getpid()))
+            handler=config["directive"], detached_content=True, pid=os.getpid()
+        )
+    )
     registered = registrationResponse.registered
     if not registered:
         _log("ERROR: Could not register rhc-worker-playbook.")
@@ -291,7 +327,9 @@ def serve():
     # create server
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     try:
-        yggdrasil_pb2_grpc.add_WorkerServicer_to_server(WorkerService(dispatcher=dispatcher), server)
+        yggdrasil_pb2_grpc.add_WorkerServicer_to_server(
+            WorkerService(dispatcher=dispatcher), server
+        )
     except ValueError as e:
         _log(str(e))
         raise
@@ -302,5 +340,5 @@ def serve():
     server.wait_for_termination()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     serve()

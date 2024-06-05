@@ -24,10 +24,11 @@ jobs:
     - uses: psf/black@stable
       with:
         version: "24.3.0"
+        options: "--extend-exclude=yggdrasil_pb2.*.py"
 
     - name: Setup flake8 annotations
       uses: rbialon/flake8-annotations@v1
 
     - name: Run flake8
       run: |
-        flake8
+        flake8 --exclude=yggdrasil_pb2_grpc.py,yggdrasil_pb2.py --ignore=E501,E402
