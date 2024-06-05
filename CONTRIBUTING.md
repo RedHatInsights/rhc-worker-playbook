@@ -20,12 +20,13 @@ $ go install git.sr.ht/~spc/mqttcli/cmd/...
 
 # Install rhc-worker-playbook develop setup
 
-`rhc-worker-playbook` needs some devel packages prior to install the `develop-setup` script, which may take some time to run as it dowloads and install everything needed to the `rhc-worker-playbook`.
+`rhc-worker-playbook` needs some devel packages in order to compile the C extensions, which may take some time to run as it dowloads and install everything needed to the `rhc-worker-playbook`.
 
 ```console
 $ sudo dnf install c-ares-devel openssl-devel python3-devel gcc gcc-c++
-$ ./develop-setup.sh
-$ sudo make dev-lib-dir
+$ python -m venv .venv
+$ source .venv/bin/activate
+$ make build
 ```
 
 Additionally it can be used through `rhc` installing the `rhc-worker-playbook` as a worker.
@@ -111,35 +112,22 @@ Alternatively, `yggdrasil` has a variable in its config file to determine the `c
  ## Running tests
 
 Any proposed code change in `rhc-worker-playbook` is automatically rejected by
-`GitLab CI Pipelines` if the change causes test failures.
+"GitHub Actions" if the change causes test failures.
 
 It is recommended for developers to run the test suite before submitting patch
 for review. This allows to catch errors as early as possible.
 
 ### Preferred way to run the tests
 
-The preferred way to run the linter tests is using `tox`. It executes tests in
-an isolated environment, by creating separate `virtualenv` and installing
-dependencies from the `test-requirements.txt` file, so the only package you
-install is `tox` itself:
+The preferred way to run the linter tests is using `flake8`.
 
 ``` shell
-$ python3 -m pip install tox
+$ python3 -m pip install flake8
+$ flake8 rhc_worker_playbook/*.py
 ```
 
-For more information, see [tox](https://tox.wiki/en/latest/). For example:
-
-To run the default set of tests:
-
-``` shell
-$ tox
-```
-
-To run the style tests:
-
-``` shell
-$ tox -e linters
-```
 ## Code Guidelines
 - Commits follow the [Conventional Commits](https://www.conventionalcommits.org/) pattern.
 - Commit messages should include a concise subject line that completes the following phrase: "when applied, this commit will...". The body of the commit should further expand on this statement with additional relevant details.
+- Files should be formatted using `black` before committing changes. Again, the
+  GitHub Action tests will fail if a file is not properly formatted.
