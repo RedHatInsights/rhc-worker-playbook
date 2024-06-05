@@ -9,3 +9,5 @@ dist
 libexec
 rhc_ansible_worker/contrib
 *.egg-info
+rhc_worker_playbook/constants.py
+scripts/rhc-worker-playbook.worker

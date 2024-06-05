@@ -1,41 +1,35 @@
+PYTHON		?= python3
+
 PKGNAME=rhc-worker-playbook
-TOPDIR=$(shell bash -c "pwd -P")
-DISTDIR=$(TOPDIR)/dist
-TARBALL=$(DISTDIR)/$(PKGNAME)-*.tar.gz
+PKGVER = $(shell $(PYTHON) setup.py --version | tr -d '\n')
 
 PREFIX		?= /usr/local
 LIBDIR		?= $(PREFIX)/lib
 LIBEXECDIR	?= $(PREFIX)/libexec
 SYSCONFDIR	?= $(PREFIX)/etc
-PYTHON		?= python3
 CONFIG_DIR	?= $(SYSCONFDIR)/rhc/workers
 CONFIG_FILE	?= $(CONFIG_DIR)/rhc-worker-playbook.toml
+WORKER_LIB_DIR ?= $(LIBDIR)/$(PKGNAME)
 PYTHON_PKGDIR ?= $(shell /usr/libexec/platform-python -Ic "from distutils.sysconfig import get_python_lib; print(get_python_lib())")
 
-.PHONY: tarball
-tarball: $(TARBALL)
-$(TARBALL): dev-lib-dir
-	$(PYTHON) setup.py sdist
-
-.PHONY: installed-lib-dir
-installed-lib-dir:
-	sed -i "/WORKER_LIB_DIR = .*/c\WORKER_LIB_DIR = \"$(LIBDIR)/$(PKGNAME)\"" ./rhc_worker_playbook/constants.py
-	sed -i "/CONFIG_FILE = .*/c\CONFIG_FILE = \"$(CONFIG_FILE)\"" ./rhc_worker_playbook/constants.py
-	sed -i "/sys.path.insert.*/c\sys.path.insert(1, \"$(PYTHON_PKGDIR)\")" ./scripts/rhc-worker-playbook.worker
-
-.PHONY: dev-lib-dir
-dev-lib-dir:
-	sed -i "/WORKER_LIB_DIR = .*/c\WORKER_LIB_DIR = os.path.join(os.path.dirname(__file__), \"contrib\")" ./rhc_worker_playbook/constants.py
-	sed -i "/CONFIG_FILE = .*/c\CONFIG_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), \"rhc-worker-playbook.toml\")" ./rhc_worker_playbook/constants.py
-	sed -i "/sys.path.insert.*/c\sys.path.insert(1, \"$(PYTHON_PKGDIR)\")" ./scripts/rhc-worker-playbook.worker
-
 .PHONY: build
-build:
+build: rhc_worker_playbook/constants.py scripts/rhc-worker-playbook.worker
 	$(PYTHON) setup.py build
 	$(PYTHON) -m pip wheel --wheel-dir=vendor --no-index --find-links vendor vendor/*.tar.gz
 
+rhc_worker_playbook/constants.py: rhc_worker_playbook/constants.py.in
+	sed \
+		-e 's,[@]CONFIG_FILE[@],$(CONFIG_FILE),g' \
+		-e 's,[@]WORKER_LIB_DIR[@],$(WORKER_LIB_DIR),g' \
+		$^ > $@
+
+scripts/rhc-worker-playbook.worker: scripts/rhc-worker-playbook.worker.in
+	sed \
+		-e 's,[@]PYTHON_PKGDIR[@],$(PYTHON_PKGDIR),g' \
+		$^ > $@
+
 .PHONY: install
-install: installed-lib-dir
+install: 
 	$(PYTHON) setup.py install --root=$(DESTDIR) --prefix=$(PREFIX) --install-scripts=$(LIBEXECDIR)/rhc --single-version-externally-managed --record /dev/null
 	$(PYTHON) -m pip install --target $(DESTDIR)$(LIBDIR)/$(PKGNAME) --no-index --find-links vendor vendor/*.whl
 	[[ -e $(DESTDIR)$(CONFIG_FILE) ]] || install -D -m644 ./rhc-worker-playbook.toml $(DESTDIR)$(CONFIG_FILE)
@@ -45,4 +39,14 @@ uninstall:
 	rm -rf $(LIBEXECDIR)/rhc/$(PKGNAME).worker
 	rm -rf $(LIBDIR)/python*/site-packages/$(PKGNAME)*
 	rm -rf $(LIBDIR)/$(PKGNAME)
+
 .PHONY: clean
+clean:
+	rm rhc_worker_playbook/constants.py
+	rm scripts/rhc-worker-playbook.worker
+
+.PHONY: tarball
+tarball: dist/$(PKGNAME)-$(PKGVER).tar.gz
+
+dist/$(PKGNAME)-$(PKGVER).tar.gz:
+	$(PYTHON) setup.py sdist
