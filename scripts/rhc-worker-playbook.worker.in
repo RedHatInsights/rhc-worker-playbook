@@ -1,7 +1,7 @@
 #!/usr/libexec/platform-python
 import sys
 
-sys.path.insert(1, "/usr/lib/python3.6/site-packages")
+sys.path.insert(1, "@PYTHON_PKGDIR@")
 sys.dont_write_bytecode = True
 from rhc_worker_playbook import server
 
