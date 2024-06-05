@@ -62,7 +62,7 @@ export GRPC_PYTHON_DISABLE_LIBC_COMPATIBILITY=True
 
 %define _lto_cflags %{nil}
 %set_build_flags
-%{make_build} PREFIX=%{_prefix} LIBDIR=%{_libdir} CONFIG_DIR=%{rhc_config_dir} PYTHON_PKGDIR=%{python3_sitelib} build
+%{make_build} PYTHON=%{__python3} PREFIX=%{_prefix} LIBDIR=%{_libdir} CONFIG_DIR=%{rhc_config_dir} PYTHON_PKGDIR=%{python3_sitelib} build
 
 # Building the Ansible Collections
 pushd community.general-%{community_general_version}
@@ -74,7 +74,7 @@ tar -cf %{_tmppath}/ansible-posix-%{ansible_posix_version}.tar.gz .
 popd
 
 %install
-%{make_install} PREFIX=%{_prefix} LIBDIR=%{_libdir} CONFIG_DIR=%{rhc_config_dir} PYTHON_PKGDIR=%{python3_sitelib}
+%{make_install} PYHTON=%{__python3} PREFIX=%{_prefix} LIBDIR=%{_libdir} CONFIG_DIR=%{rhc_config_dir} PYTHON_PKGDIR=%{python3_sitelib}
 
 # Installing the Ansible Collections
 mkdir -p %{buildroot}%{_datadir}/rhc-worker-playbook/ansible/collections/ansible_collections/community/general

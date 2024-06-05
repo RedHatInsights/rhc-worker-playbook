@@ -1,4 +1,4 @@
-#!/usr/libexec/platform-python
+#!@PYTHON_PATH@
 import sys
 
 sys.path.insert(1, "@PYTHON_PKGDIR@")
