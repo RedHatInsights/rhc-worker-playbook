@@ -31,4 +31,4 @@ jobs:
 
     - name: Run flake8
       run: |
-        flake8 --exclude=yggdrasil_pb2_grpc.py,yggdrasil_pb2.py --ignore=E501,E402
+        flake8
