@@ -62,8 +62,7 @@ export GRPC_PYTHON_DISABLE_LIBC_COMPATIBILITY=True
 
 %define _lto_cflags %{nil}
 %set_build_flags
-%{__make} PREFIX=%{_prefix} LIBDIR=%{_libdir} CONFIG_DIR=%{rhc_config_dir} PYTHON_PKGDIR=%{python3_sitelib} installed-lib-dir
-%{make_build} build
+%{make_build} PREFIX=%{_prefix} LIBDIR=%{_libdir} CONFIG_DIR=%{rhc_config_dir} PYTHON_PKGDIR=%{python3_sitelib} build
 
 # Building the Ansible Collections
 pushd community.general-%{community_general_version}
