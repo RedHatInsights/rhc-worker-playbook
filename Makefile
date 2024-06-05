@@ -1,4 +1,5 @@
 PYTHON		?= python3
+PYTHON_PATH  = $(shell which $(PYTHON))
 
 PKGNAME=rhc-worker-playbook
 PKGVER = $(shell $(PYTHON) setup.py --version | tr -d '\n')
@@ -25,6 +26,7 @@ rhc_worker_playbook/constants.py: rhc_worker_playbook/constants.py.in
 
 scripts/rhc-worker-playbook.worker: scripts/rhc-worker-playbook.worker.in
 	sed \
+		-e 's,[@]PYTHON_PATH[@],$(PYTHON_PATH),g' \
 		-e 's,[@]PYTHON_PKGDIR[@],$(PYTHON_PKGDIR),g' \
 		$^ > $@
 
