@@ -1,0 +1,10 @@
+summary: Basic test plan
+discover:
+    how: fmf
+prepare:
+    - name: Install packages
+      how: install
+      package:
+        - rhc
+execute:
+    how: tmt
