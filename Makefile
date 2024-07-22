@@ -16,7 +16,7 @@ PYTHON_PKGDIR ?= $(shell /usr/libexec/platform-python -Ic "from distutils.syscon
 .PHONY: build
 build: rhc_worker_playbook/constants.py scripts/rhc-worker-playbook.worker
 	$(PYTHON) setup.py build
-	$(PYTHON) -m pip wheel --wheel-dir=vendor --no-index --find-links vendor vendor/*.tar.gz
+	$(PYTHON) -m pip wheel --wheel-dir ./vendor --no-index --find-links ./vendor vendor/*.tar.gz
 
 rhc_worker_playbook/constants.py: rhc_worker_playbook/constants.py.in
 	sed \
