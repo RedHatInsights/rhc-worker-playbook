@@ -132,4 +132,4 @@ $ flake8 rhc_worker_playbook/*.py
 - Files should be formatted using `black` before committing changes. Again, the
   GitHub Action tests will fail if a file is not properly formatted.
 - A release branch, `release-0.1` exists for maintaining the 0.1.x branch. This
-  branch is intended to maintain RHEL8 compatibility.
+  branch is intended to maintain RHEL8 and RHEL9 compatibility.
