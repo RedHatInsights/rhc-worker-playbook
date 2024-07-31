@@ -1,7 +1,0 @@
----
-- hosts: localhost
-  gather_facts: false
-  become: true
-  tasks:
-  - name: run insights-client --version
-    command: insights-client --version

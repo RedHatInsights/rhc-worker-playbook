@@ -1,13 +1,2 @@
-__pycache__
-bin
-lib
-lib64
-include
-pip-selfcheck.json
-build
-dist
-libexec
-rhc_ansible_worker/contrib
-*.egg-info
-rhc_worker_playbook/constants.py
-scripts/rhc-worker-playbook.worker
+builddir
+vendor

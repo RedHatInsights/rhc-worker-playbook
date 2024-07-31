@@ -1,0 +1,13 @@
+[Unit]
+Description=rhc-worker-playbook worker service
+Documentation=https://github.com/RedHatInsights/rhc-worker-playbook
+
+[Service]
+Type=dbus
+User=root
+Group=@worker_user@
+ExecStart=@libexecdir@/rhc-worker-playbook
+BusName=com.redhat.Yggdrasil1.Worker1.rhc_worker_playbook
+
+[Install]
+WantedBy=multi-user.target
