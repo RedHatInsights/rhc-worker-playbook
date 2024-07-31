@@ -1,0 +1,3 @@
+[D-BUS Service]
+Name=com.redhat.Yggdrasil1.Worker1.rhc_worker_playbook
+SystemdService=com.redhat.Yggdrasil1.Worker1.rhc_worker_playbook.service
