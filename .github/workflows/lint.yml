@@ -1,0 +1,34 @@
+name: Lint
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  lint-commits:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: aevea/commitsar@v0.20.2
+  lint-code:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "stable"
+      - uses: actions/checkout@v4
+      - uses: golangci/golangci-lint-action@v6.1.0
+        with:
+          version: latest
+          args: --verbose --timeout=3m
+      - run: go install github.com/segmentio/golines@latest
+      - run: if [ "$(golines . --dry-run | wc -l)" -gt 0 ]; then exit 1; fi
+  lint-language:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: get-woke/woke-action@v0
+        with:
+          fail-on-error: true
