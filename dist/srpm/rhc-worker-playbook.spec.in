@@ -97,7 +97,7 @@ export %gomodulesmode
     %{buildroot}%{_datadir}/rhc-worker-playbook/ansible/collections/ansible_collections/ansible/posix/.azure-pipelines/scripts/*.py \
     %{buildroot}%{_datadir}/rhc-worker-playbook/ansible/collections/ansible_collections/ansible/posix/tests/utils/shippable/*.py \
     %{buildroot}%{_datadir}/rhc-worker-playbook/ansible/collections/ansible_collections/community/general/.azure-pipelines/scripts/*.py \
-    %{buildroot}%{_datadir}/rhc-worker-playbook/ansible/collections/ansible_collections/community/general/tests/sanity/extra/*.py \
+    %{buildroot}%{_datadir}/rhc-worker-playbook/ansible/collections/ansible_collections/community/general/tests/*/extra/*.py \
     %{buildroot}%{_datadir}/rhc-worker-playbook/ansible/collections/ansible_collections/community/general/tests/integration/targets/django_manage/files/base_test/1045-single-app-project/single_app_project/*.py \
     %{buildroot}%{_datadir}/rhc-worker-playbook/ansible/collections/ansible_collections/community/general/tests/integration/targets/django_manage/files/base_test/simple_project/p1/*.py \
     %{nil}
