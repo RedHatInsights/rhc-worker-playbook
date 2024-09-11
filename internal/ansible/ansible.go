@@ -211,6 +211,7 @@ func RunPlaybook(id string, playbook []byte, correlationID string) (chan Event, 
 		[]string{
 			"PATH=/sbin:/bin:/usr/sbin:/usr/bin",
 			"PYTHONPATH=" + filepath.Join(constants.LibDir, "rhc-worker-playbook"),
+			"PYTHONDONTWRITEBYTECODE=1",
 			"ANSIBLE_COLLECTIONS_PATH=" + filepath.Join(
 				constants.DataDir,
 				"rhc-worker-playbook",
