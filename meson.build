@@ -3,7 +3,7 @@ project('rhc-worker-playbook', version: '0.2.0')
 go = find_program('go')
 dbus = dependency('dbus-1', version: '>=1.12')
 systemd = dependency('systemd', version: '>=239')
-yggdrasil = dependency('yggdrasil', version: '>=0.4.1')
+yggdrasil = dependency('yggdrasil', version: '>=0.4.2')
 
 goldflags = get_option('goldflags')
 goldflags += ' -X "github.com/redhatinsights/rhc-worker-playbook/internal/constants.Version=' + meson.project_version() + '"'
