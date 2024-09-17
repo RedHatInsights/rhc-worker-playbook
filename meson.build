@@ -5,6 +5,10 @@ dbus = dependency('dbus-1', version: '>=1.12')
 systemd = dependency('systemd', version: '>=239')
 yggdrasil = dependency('yggdrasil', version: '>=0.4.2')
 
+if get_option('vendor')
+  meson.add_dist_script(join_paths('build-aux', 'vendor.sh'))
+endif
+
 goldflags = get_option('goldflags')
 goldflags += ' -X "github.com/redhatinsights/rhc-worker-playbook/internal/constants.Version=' + meson.project_version() + '"'
 goldflags += ' -X "github.com/redhatinsights/rhc-worker-playbook/internal/constants.PrefixDir=' + get_option('prefix') + '"'
