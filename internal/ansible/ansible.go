@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"git.sr.ht/~spc/go-log"
 	"github.com/google/uuid"
@@ -15,27 +16,10 @@ import (
 	"github.com/rjeczalik/notify"
 )
 
-// Event represents data from an Ansible Runner event.
-type Event struct {
-	Event       string `json:"event"`
-	UUID        string `json:"uuid"`
-	Counter     int    `json:"counter"`
-	Stdout      string `json:"stdout"`
-	StartLine   int    `json:"start_line"`
-	EndLine     int    `json:"end_line"`
-	RunnerIdent string `json:"runner_ident"`
-	Created     string `json:"created"`
-	EventData   struct {
-		CRCDispatcherCorrelationID string `json:"crc_dispatcher_correlation_id"`
-		CRCDispatcherErrorCode     string `json:"crc_dispatcher_error_code"`
-		CRCDispatcherErrorDetails  string `json:"crc_dispatcher_error_details"`
-	} `json:"event_data"`
-}
-
 // RunPlaybook creates an ansible-runner job to run the provided playbook. The
 // function returns a channel over which the caller can receive ansible-runner
 // events as they happen. The channel is closed when the job completes.
-func RunPlaybook(id string, playbook []byte, correlationID string) (chan Event, error) {
+func RunPlaybook(id string, playbook []byte, correlationID string) (chan json.RawMessage, error) {
 	privateDataDir := filepath.Join(constants.StateDir, id)
 
 	if err := os.WriteFile(filepath.Join(constants.StateDir, id+".yaml"), playbook, 0600); err != nil {
@@ -53,28 +37,34 @@ func RunPlaybook(id string, playbook []byte, correlationID string) (chan Event, 
 	}
 	_ = status.Close()
 
-	events := make(chan Event)
+	// Guard the events channel with a WaitGroup to ensure that all goroutines
+	// that need to send to it are finished before closing the channel.
+	var wg sync.WaitGroup
+	wg.Add(1)
+	events := make(chan json.RawMessage)
 
 	// publish an "executor_on_start" event to signal cloud connector that a run
 	// event has started. This is run on a goroutine in case the events
 	// channel doesn't have a receiver connected yet to avoid blocking the
 	// continuation of this function.
 	go func() {
-		events <- Event{
-			Event:     "executor_on_start",
-			UUID:      uuid.New().String(),
-			Counter:   -1,
-			Stdout:    "",
-			StartLine: 0,
-			EndLine:   0,
-			EventData: struct {
-				CRCDispatcherCorrelationID string `json:"crc_dispatcher_correlation_id"`
-				CRCDispatcherErrorCode     string `json:"crc_dispatcher_error_code"`
-				CRCDispatcherErrorDetails  string `json:"crc_dispatcher_error_details"`
-			}{
-				CRCDispatcherCorrelationID: correlationID,
+		event := map[string]interface{}{
+			"event":      "executor_on_start",
+			"uuid":       uuid.New().String(),
+			"counter":    -1,
+			"stdout":     "",
+			"start_line": 0,
+			"end_line":   0,
+			"event_data": map[string]interface{}{
+				"crc_dispatcher_correlation_id": correlationID,
 			},
 		}
+		data, err := json.Marshal(event)
+		if err != nil {
+			log.Errorf("cannot marshal json: %v", err)
+			return
+		}
+		events <- data
 	}()
 
 	// started is a closure that's passed to the StartProcess function as its
@@ -112,14 +102,51 @@ func RunPlaybook(id string, playbook []byte, correlationID string) (chan Event, 
 							continue
 						}
 
-						var event Event
+						// Unmarshal the event data into an untyped map instead
+						// of a strictly typed structure. Using a strictly typed
+						// struct has the unintentional side effect of
+						// discarding any fields from the ansible-running event
+						// JSON that are not explicitly named in a struct. This
+						// allows the fields that are immaterial to the worker
+						// to still be included in the data structure.
+						var event map[string]interface{}
 						if err := json.Unmarshal(data, &event); err != nil {
 							log.Errorf("cannot unmarshal data: data=%v error=%v", data, err)
 							continue
 						}
+						eventData, ok := event["event_data"]
+						if !ok {
+							eventData = map[string]interface{}{}
+						}
+						if _, has := eventData.(map[string]interface{})["crc_dispatcher_correlation_id"]; !has {
+							eventData.(map[string]interface{})["crc_dispatcher_correlation_id"] = correlationID
+						}
+						event["event_data"] = eventData
 
-						events <- event
-						log.Infof("event sent: event=%v", event)
+						// "counter" is a required field according to
+						// playbook-dispatcher's openapi schema. Messages
+						// without a "counter" field are rejected as invalid by
+						// the server.
+						// The same is true for "start_line" and "end_line".
+						// https://github.com/RedHatInsights/playbook-dispatcher/blob/22853a47c5bb85c94fdb2a645fef02758247d4ae/schema/playbookRunResponse.message.yaml#L58-L63
+						if _, has := event["counter"]; !has {
+							event["counter"] = -1
+						}
+						if _, has := event["start_line"]; !has {
+							event["start_line"] = 0
+						}
+						if _, has := event["end_line"]; !has {
+							event["end_line"] = 0
+						}
+
+						modifiedData, err := json.Marshal(event)
+						if err != nil {
+							log.Errorf("cannot marshal JSON: %v", err)
+							continue
+						}
+
+						events <- modifiedData
+						log.Infof("event sent: event=%+v", event)
 					}
 				}
 			}
@@ -139,6 +166,7 @@ func RunPlaybook(id string, playbook []byte, correlationID string) (chan Event, 
 		go func(c chan notify.EventInfo) {
 			log.Tracef("start goroutine watching status file: %v", jobEventsDir)
 			defer log.Tracef("stop goroutine watching status file: %v", jobEventsDir)
+			defer wg.Done()
 
 			for e := range c {
 				log.Debugf("notify event: event=%v path=%v", e.Event(), e.Path())
@@ -153,21 +181,24 @@ func RunPlaybook(id string, playbook []byte, correlationID string) (chan Event, 
 					case "failed":
 						// publish an "executor_on_failed" event to signal
 						// cloud connector that a run has failed.
-						events <- Event{
-							Event:     "executor_on_failed",
-							UUID:      uuid.New().String(),
-							Counter:   -1,
-							StartLine: 0,
-							EndLine:   0,
-							EventData: struct {
-								CRCDispatcherCorrelationID string `json:"crc_dispatcher_correlation_id"`
-								CRCDispatcherErrorCode     string `json:"crc_dispatcher_error_code"`
-								CRCDispatcherErrorDetails  string `json:"crc_dispatcher_error_details"`
-							}{
-								CRCDispatcherCorrelationID: correlationID,
-								CRCDispatcherErrorCode:     "UNDEFINED_ERROR",
+						event := map[string]interface{}{
+							"event":      "executor_on_failed",
+							"uuid":       uuid.New().String(),
+							"counter":    -1,
+							"start_line": 0,
+							"end_line":   0,
+							"event_data": map[string]interface{}{
+								"crc_dispatcher_correlation_id": correlationID,
+								"crc_dispatcher_error_code":     "UNDEFINED_ERROR",
 							},
 						}
+
+						data, err := json.Marshal(event)
+						if err != nil {
+							log.Errorf("cannot marshal JSON: %v", err)
+							continue
+						}
+						events <- json.RawMessage(data)
 					case "successful":
 					default:
 						log.Errorf("unsupported status case: %v", string(data))
@@ -187,6 +218,7 @@ func RunPlaybook(id string, playbook []byte, correlationID string) (chan Event, 
 					err,
 				)
 			}
+			wg.Wait()
 			close(events)
 		})
 		if err != nil {
