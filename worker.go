@@ -4,10 +4,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
+	"mime/multipart"
+	"net/textproto"
 	"strings"
 
 	"git.sr.ht/~spc/go-log"
 	"github.com/goccy/go-yaml"
+	"github.com/google/uuid"
 	"github.com/redhatinsights/rhc-worker-playbook/internal/ansible"
 	"github.com/redhatinsights/rhc-worker-playbook/internal/config"
 	"github.com/redhatinsights/rhc-worker-playbook/internal/exec"
@@ -56,41 +60,63 @@ func rx(
 	// emitted.
 	go func() {
 		// TODO: support metadata["response_interval"] batch processing
+		var cachedEvents []byte
 		for event := range events {
-			log.Debugf("ansible-runner event: %v", event)
+			log.Debugf("ansible-runner event: %s", event)
 
-			responseData, err := json.Marshal(event)
-			if err != nil {
-				log.Errorf("cannot marshal event: %v", err)
+			cachedEvents = append(cachedEvents, append(event, '\n')...)
+
+			var runnerEvent map[string]interface{}
+			if err := json.Unmarshal(event, &runnerEvent); err != nil {
+				log.Errorf("cannot unmarshal JSON: %v", err)
 				continue
 			}
 
-			err = w.EmitEvent(ipc.WorkerEventNameWorking, event.UUID, id, map[string]string{
-				"message": string(responseData),
+			eventUUID, ok := runnerEvent["uuid"]
+			if !ok {
+				log.Errorf("runner event missing UUID: %+v", runnerEvent)
+				continue
+			}
+			err = w.EmitEvent(ipc.WorkerEventNameWorking, eventUUID.(string), id, map[string]string{
+				"message": string(event),
 			})
 			if err != nil {
 				log.Errorf("cannot emit event: event=%v error=%v", ipc.WorkerEventNameWorking, err)
 				continue
 			}
 
-			responseCode, responseMetadata, responseBody, err := w.Transmit(
-				returnURL,
-				event.UUID,
-				id,
-				map[string]string{},
-				responseData,
-			)
-			if err != nil {
-				log.Errorf("cannot transmit data: %v", err)
-				continue
-			}
-			log.Debugf(
-				"received response: code=%v responseMetadata=%v",
-				responseCode,
-				responseMetadata,
-			)
-			log.Tracef("responseBody=%v", string(responseBody))
 		}
+
+		requestBody, outerContentType, err := buildRequestBody(
+			string(cachedEvents),
+			"runner-events",
+		)
+		if err != nil {
+			log.Errorf("cannot build request body: event=%+v error=%v", cachedEvents, err)
+			return
+		}
+
+		responseCode, responseMetadata, responseBody, err := w.Transmit(
+			returnURL,
+			uuid.New().String(),
+			id,
+			map[string]string{
+				"Content-Type": outerContentType,
+			},
+			requestBody.Bytes(),
+		)
+		if err != nil {
+			log.Errorf("cannot transmit data: %v", err)
+			return
+		}
+		log.Debugf(
+			"received response: code=%v responseMetadata=%v",
+			responseCode,
+			responseMetadata,
+		)
+		log.Tracef("responseBody=%v", string(responseBody))
+
+		log.Infof("finished message: message-id=%v", id)
 	}()
 
 	return nil
@@ -175,4 +201,35 @@ func verifyPlaybook(data []byte, insightsCoreGPGCheck bool) ([]byte, error) {
 	}
 
 	return playbookData, nil
+}
+
+// buildRequestBody assembles a multipart/mixed HTTP request body suitable for
+// uploading to ingress.
+func buildRequestBody(body string, filename string) (*bytes.Buffer, string, error) {
+	requestBody := &bytes.Buffer{}
+	writer := multipart.NewWriter(requestBody)
+	defer writer.Close()
+
+	// Set the inner content-type accordingly, as required by ingress.
+	// https://github.com/RedHatInsights/insights-ingress-go/blob/ada891f3dff3f402e4c03ef8aa3a34908cc0a4dc/README.md?plain=1#L46
+	innerContentType := "application/vnd.redhat.playbook.v1+jsonl"
+	contentDisposition := fmt.Sprintf(`form-data; name="file"; filename="%s"`, filename)
+
+	h := make(textproto.MIMEHeader)
+	h.Set("Content-Disposition", contentDisposition)
+	h.Set("Content-Type", innerContentType)
+
+	part, err := writer.CreatePart(h)
+	if err != nil {
+		return nil, "", fmt.Errorf("cannot create form part: %v", err)
+	}
+
+	_, err = io.WriteString(part, body)
+	if err != nil {
+		return nil, "", fmt.Errorf("cannot write body to form part: %v", err)
+	}
+
+	outerContentType := fmt.Sprintf("multipart/form-data; boundary=%s", writer.Boundary())
+
+	return requestBody, outerContentType, nil
 }
