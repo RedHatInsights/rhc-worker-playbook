@@ -73,7 +73,7 @@ func rx(
 				continue
 			}
 
-			_, _, _, err = w.Transmit(
+			responseCode, responseMetadata, responseBody, err := w.Transmit(
 				returnURL,
 				event.UUID,
 				id,
@@ -84,6 +84,12 @@ func rx(
 				log.Errorf("cannot transmit data: %v", err)
 				continue
 			}
+			log.Debugf(
+				"received response: code=%v responseMetadata=%v",
+				responseCode,
+				responseMetadata,
+			)
+			log.Tracef("responseBody=%v", string(responseBody))
 		}
 	}()
 
