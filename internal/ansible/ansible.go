@@ -211,13 +211,6 @@ func RunPlaybook(id string, playbook []byte, correlationID string) (chan json.Ra
 		// does, clean up.
 		err := exec.WaitProcess(pid, func(pid int, state *os.ProcessState) {
 			log.Debugf("process stopped: pid=%v runner_ident=%v", pid, id)
-			if err := os.Remove(filepath.Join(constants.StateDir, id+".yaml")); err != nil {
-				log.Errorf(
-					"cannot remove file: file=%v error=%v",
-					filepath.Join(constants.StateDir, id+".yaml"),
-					err,
-				)
-			}
 			wg.Wait()
 			close(events)
 		})
