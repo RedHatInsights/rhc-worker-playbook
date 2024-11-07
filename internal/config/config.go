@@ -1,10 +1,13 @@
 package config
 
+import "time"
+
 const (
 	FlagNameDirective            = "directive"
 	FlagNameInsightsCoreGPGCheck = "insights-core-gpg-check"
 	FlagNameLogLevel             = "log-level"
 	FlagNameVerifyPlaybook       = "verify-playbook"
+	FlagNameResponseInterval     = "response-interval"
 )
 
 type Config struct {
@@ -21,6 +24,10 @@ type Config struct {
 	// VerifyPlaybook determines whether or not to verify incoming playbooks'
 	// GPG signatures.
 	VerifyPlaybook bool
+
+	// ResponseInterval overrides the response interval value set in the
+	// message, instead always setting it to this value.
+	ResponseInterval time.Duration
 }
 
 // DefaultConfig is a globally accessible Config data structure, initialized
@@ -30,4 +37,5 @@ var DefaultConfig = Config{
 	InsightsCoreGPGCheck: true,
 	LogLevel:             "error",
 	VerifyPlaybook:       true,
+	ResponseInterval:     0,
 }
