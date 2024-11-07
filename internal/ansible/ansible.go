@@ -121,6 +121,7 @@ func RunPlaybook(id string, playbook []byte, correlationID string) (chan json.Ra
 						if _, has := eventData.(map[string]interface{})["crc_dispatcher_correlation_id"]; !has {
 							eventData.(map[string]interface{})["crc_dispatcher_correlation_id"] = correlationID
 						}
+						eventData.(map[string]interface{})["crc_message_version"] = 1
 						event["event_data"] = eventData
 
 						// "counter" is a required field according to
