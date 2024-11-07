@@ -50,6 +50,12 @@ func main() {
 			Value: config.DefaultConfig.InsightsCoreGPGCheck,
 			Usage: "perform GPG signature verification on insights-core.egg",
 		}),
+		altsrc.NewDurationFlag(&cli.DurationFlag{
+			Name:   config.FlagNameResponseInterval,
+			Value:  config.DefaultConfig.ResponseInterval,
+			Usage:  "override per-message response interval value",
+			Hidden: true,
+		}),
 	}
 
 	app.Before = beforeAction
@@ -106,4 +112,5 @@ func loadConfigFromContext(ctx *cli.Context) {
 	config.DefaultConfig.LogLevel = ctx.String(config.FlagNameLogLevel)
 	config.DefaultConfig.VerifyPlaybook = ctx.Bool(config.FlagNameVerifyPlaybook)
 	config.DefaultConfig.InsightsCoreGPGCheck = ctx.Bool(config.FlagNameInsightsCoreGPGCheck)
+	config.DefaultConfig.ResponseInterval = ctx.Duration(config.FlagNameResponseInterval)
 }
