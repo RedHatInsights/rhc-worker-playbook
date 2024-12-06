@@ -121,6 +121,7 @@ func RunPlaybook(id string, playbook []byte, correlationID string) (chan json.Ra
 						if _, has := eventData.(map[string]interface{})["crc_dispatcher_correlation_id"]; !has {
 							eventData.(map[string]interface{})["crc_dispatcher_correlation_id"] = correlationID
 						}
+						eventData.(map[string]interface{})["crc_message_version"] = 1
 						event["event_data"] = eventData
 
 						// "counter" is a required field according to
@@ -207,17 +208,43 @@ func RunPlaybook(id string, playbook []byte, correlationID string) (chan json.Ra
 			}
 		}(statusFileChan)
 
+		if log.CurrentLevel() >= log.LevelDebug {
+			writeLog := func(filePath string, reader io.ReadCloser) {
+				file, err := os.Create(filePath)
+				if err != nil {
+					log.Errorf("cannot open %v for writing: %v", filePath, err)
+					return
+				}
+
+				go func() {
+					log.Tracef("start goroutine writing to %v", filePath)
+					defer log.Tracef("stop gorouting writing to %v", filePath)
+					defer file.Close()
+					buf := make([]byte, 1024)
+					for {
+						n, err := reader.Read(buf)
+						if n > 0 {
+							_, _ = file.Write(buf[:n])
+						}
+						if err != nil {
+							if err == io.EOF {
+								break
+							}
+							log.Errorf("cannot read from %v: %v", reader, err)
+							break
+						}
+					}
+				}()
+			}
+
+			writeLog(filepath.Join(privateDataDir, "stdout"), stdout)
+			writeLog(filepath.Join(privateDataDir, "stderr"), stderr)
+		}
+
 		// Block the remainder of the routine until the process exits. When it
 		// does, clean up.
-		err := exec.WaitProcess(pid, func(pid int, state *os.ProcessState) {
-			log.Debugf("process stopped: pid=%v runner_ident=%v", pid, id)
-			if err := os.Remove(filepath.Join(constants.StateDir, id+".yaml")); err != nil {
-				log.Errorf(
-					"cannot remove file: file=%v error=%v",
-					filepath.Join(constants.StateDir, id+".yaml"),
-					err,
-				)
-			}
+		err = exec.WaitProcess(pid, func(pid int, state *os.ProcessState) {
+			log.Debugf("process stopped: pid=%v runner_ident=%v exit=%v", pid, id, state.ExitCode())
 			wg.Wait()
 			close(events)
 		})
