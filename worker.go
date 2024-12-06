@@ -56,6 +56,13 @@ func rx(
 	if config.DefaultConfig.ResponseInterval > 0 {
 		responseInterval = config.DefaultConfig.ResponseInterval
 	}
+	if config.DefaultConfig.BatchEvents > 0 {
+		// Set the response interval to 500ms when batching events. This has the
+		// effect of matching the "<-timeout" case every time the channel select
+		// statement evaluates. This allows the same codepath to work when
+		// either batching events by quantity or by timeout.
+		responseInterval = 500 * time.Millisecond
+	}
 
 	if config.DefaultConfig.VerifyPlaybook {
 		d, err := verifyPlaybook(data, config.DefaultConfig.InsightsCoreGPGCheck)
@@ -82,18 +89,49 @@ func rx(
 		done := make(chan struct{})
 		timeout := time.Tick(responseInterval)
 		go func() {
+			batchStart := 0
+			log.Trace("start goroutine periodically transmitting events")
+			defer log.Trace("stop goroutine periodically transmitting events")
 			for {
 				select {
 				case <-done:
 					return
 				case <-timeout:
 					log.Tracef("%v timeout expired", responseInterval)
+					var batchEnd int
+
 					lock.RLock()
-					err := transmitCachedEvents(w, id, returnURL, cachedEvents)
+					if config.DefaultConfig.BatchEvents > 0 {
+						batchEnd = batchStart + config.DefaultConfig.BatchEvents
+						if batchEnd > len(cachedEvents) {
+							batchEnd = len(cachedEvents)
+						}
+					} else {
+						batchStart = 0
+						batchEnd = len(cachedEvents)
+					}
+
+					// If the value of the current batch start has caught up to
+					// the known end of the cached events and the timeout has
+					// triggered again, skip this iteration.
+					if batchStart >= batchEnd {
+						continue
+					}
+
+					log.Tracef("cachedEvents[%v:%v]", batchStart, batchEnd)
+					err := transmitCachedEvents(
+						w,
+						id,
+						returnURL,
+						cachedEvents[batchStart:batchEnd],
+					)
 					lock.RUnlock()
 					if err != nil {
 						log.Errorf("cannot transmit events: %v", err)
 					}
+					batchStart = batchEnd
+				default:
+					continue
 				}
 			}
 		}()
