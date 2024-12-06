@@ -8,6 +8,7 @@ const (
 	FlagNameLogLevel             = "log-level"
 	FlagNameVerifyPlaybook       = "verify-playbook"
 	FlagNameResponseInterval     = "response-interval"
+	FlagNameBatchEvents          = "batch-events"
 )
 
 type Config struct {
@@ -28,6 +29,10 @@ type Config struct {
 	// ResponseInterval overrides the response interval value set in the
 	// message, instead always setting it to this value.
 	ResponseInterval time.Duration
+
+	// BatchEvents is the number of events to batch together in a given transmit
+	// response.
+	BatchEvents int
 }
 
 // DefaultConfig is a globally accessible Config data structure, initialized
@@ -38,4 +43,5 @@ var DefaultConfig = Config{
 	LogLevel:             "error",
 	VerifyPlaybook:       true,
 	ResponseInterval:     0,
+	BatchEvents:          0,
 }

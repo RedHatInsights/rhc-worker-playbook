@@ -56,6 +56,12 @@ func main() {
 			Usage:  "override per-message response interval value",
 			Hidden: true,
 		}),
+		altsrc.NewIntFlag(&cli.IntFlag{
+			Name:   config.FlagNameBatchEvents,
+			Value:  config.DefaultConfig.BatchEvents,
+			Usage:  "number of events to batch together in a single transmision",
+			Hidden: true,
+		}),
 	}
 
 	app.Before = beforeAction
@@ -113,4 +119,5 @@ func loadConfigFromContext(ctx *cli.Context) {
 	config.DefaultConfig.VerifyPlaybook = ctx.Bool(config.FlagNameVerifyPlaybook)
 	config.DefaultConfig.InsightsCoreGPGCheck = ctx.Bool(config.FlagNameInsightsCoreGPGCheck)
 	config.DefaultConfig.ResponseInterval = ctx.Duration(config.FlagNameResponseInterval)
+	config.DefaultConfig.BatchEvents = ctx.Int(config.FlagNameBatchEvents)
 }

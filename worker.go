@@ -56,6 +56,13 @@ func rx(
 	if config.DefaultConfig.ResponseInterval > 0 {
 		responseInterval = config.DefaultConfig.ResponseInterval
 	}
+	if config.DefaultConfig.BatchEvents > 0 {
+		// Set the response interval to 500ms when batching events. This has the
+		// effect of matching the "<-timeout" case every time the channel select
+		// statement evaluates. This allows the same codepath to work when
+		// either batching events by quantity or by timeout.
+		responseInterval = 500 * time.Millisecond
+	}
 
 	if config.DefaultConfig.VerifyPlaybook {
 		d, err := verifyPlaybook(data, config.DefaultConfig.InsightsCoreGPGCheck)
@@ -76,24 +83,44 @@ func rx(
 		var cachedEvents []json.RawMessage
 		lock := sync.RWMutex{}
 
+		batchStart := 0
 		// start a goroutine that periodically (after the responseInterval
 		// duration elapses) transmit the cachedEvents slice. If a value is
 		// received on the done channel, the routine will return.
 		done := make(chan struct{})
 		timeout := time.Tick(responseInterval)
 		go func() {
+			log.Trace("start goroutine periodically transmitting events")
+			defer log.Trace("stop goroutine periodically transmitting events")
 			for {
 				select {
 				case <-done:
+					log.Trace("received value on done channel")
 					return
 				case <-timeout:
 					log.Tracef("%v timeout expired", responseInterval)
+					batchEnd := batchStart + config.DefaultConfig.BatchEvents
+					if batchEnd > len(cachedEvents) {
+						batchEnd = len(cachedEvents)
+					}
+					if batchStart >= batchEnd {
+						continue
+					}
 					lock.RLock()
-					err := transmitCachedEvents(w, id, returnURL, cachedEvents)
+					log.Tracef("cachedEvents[%v:%v]", batchStart, batchEnd)
+					err := transmitCachedEvents(
+						w,
+						id,
+						returnURL,
+						cachedEvents[batchStart:batchEnd],
+					)
 					lock.RUnlock()
 					if err != nil {
 						log.Errorf("cannot transmit events: %v", err)
 					}
+					batchStart = batchEnd
+				default:
+					continue
 				}
 			}
 		}()
@@ -167,6 +194,8 @@ func transmitCachedEvents(
 	if err != nil {
 		return fmt.Errorf("cannot build request body: event=%+v error=%v", cachedEvents, err)
 	}
+
+	log.Tracef("requestBody = %v", requestBody.String())
 
 	responseCode, responseMetadata, responseBody, err := w.Transmit(
 		returnURL,
