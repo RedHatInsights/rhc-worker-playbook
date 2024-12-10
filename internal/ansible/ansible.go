@@ -230,7 +230,6 @@ func RunPlaybook(id string, playbook []byte, correlationID string) (chan json.Ra
 			"run",
 			"--ident",
 			id,
-			"--json",
 			"--playbook",
 			filepath.Join(constants.StateDir, id+".yaml"),
 			privateDataDir,
