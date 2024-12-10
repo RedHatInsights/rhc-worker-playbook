@@ -95,7 +95,8 @@ func RunPlaybook(id string, playbook []byte, correlationID string) (chan json.Ra
 				log.Debugf("notify event: event=%v path=%v", e.Event(), e.Path())
 				switch e.Event() {
 				case notify.InMovedTo:
-					if strings.HasSuffix(e.Path(), ".json") {
+					if strings.HasSuffix(e.Path(), ".json") &&
+						!strings.Contains(e.Path(), "partial") {
 						data, err := os.ReadFile(e.Path())
 						if err != nil {
 							log.Errorf("cannot read file: file=%v error=%v", e.Path(), err)
