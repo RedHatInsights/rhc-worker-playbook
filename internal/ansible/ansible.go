@@ -209,8 +209,8 @@ func RunPlaybook(id string, playbook []byte, correlationID string) (chan json.Ra
 
 		// Block the remainder of the routine until the process exits. When it
 		// does, clean up.
-		err := exec.WaitProcess(pid, func(pid int, state *os.ProcessState) {
-			log.Debugf("process stopped: pid=%v runner_ident=%v", pid, id)
+		err = exec.WaitProcess(pid, func(pid int, state *os.ProcessState) {
+			log.Debugf("process stopped: pid=%v runner_ident=%v exit=%v", pid, id, state.ExitCode())
 			wg.Wait()
 			close(events)
 		})
