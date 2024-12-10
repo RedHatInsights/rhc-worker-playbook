@@ -49,7 +49,7 @@ the local host.}
 %global godocs          CONTRIBUTING.md README.md
 
 Name:               rhc-worker-playbook
-Release:            0%{?dist}
+Release:            99%{?dist}
 Summary:            Ansible playbook yggdrasil worker
 
 License:            GPL-2.0-or-later
