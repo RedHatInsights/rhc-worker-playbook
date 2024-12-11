@@ -201,7 +201,9 @@ func RunPlaybook(id string, playbook []byte, correlationID string) (chan json.Ra
 							continue
 						}
 						events <- json.RawMessage(data)
+						return
 					case "successful":
+						return
 					default:
 						log.Errorf("unsupported status case: %v", string(data))
 					}
