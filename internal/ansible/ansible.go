@@ -164,9 +164,9 @@ func RunPlaybook(id string, playbook []byte, correlationID string) (chan json.Ra
 		defer notify.Stop(statusFileChan)
 		defer close(statusFileChan)
 		go func(c chan notify.EventInfo) {
-			log.Tracef("start goroutine watching status file: %v", jobEventsDir)
-			defer log.Tracef("stop goroutine watching status file: %v", jobEventsDir)
 			defer wg.Done()
+			log.Tracef("start goroutine watching status file: %v", statusFilePath)
+			defer log.Tracef("stop goroutine watching status file: %v", statusFilePath)
 
 			for e := range c {
 				log.Debugf("notify event: event=%v path=%v", e.Event(), e.Path())
