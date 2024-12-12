@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
+	"time"
 
 	"git.sr.ht/~spc/go-log"
 	"github.com/google/uuid"
@@ -16,32 +16,85 @@ import (
 	"github.com/rjeczalik/notify"
 )
 
-// RunPlaybook creates an ansible-runner job to run the provided playbook. The
-// function returns a channel over which the caller can receive ansible-runner
-// events as they happen. The channel is closed when the job completes.
-func RunPlaybook(id string, playbook []byte, correlationID string) (chan json.RawMessage, error) {
-	privateDataDir := filepath.Join(constants.StateDir, id)
+// Runner maintains the state of a playbook run during execution.
+type Runner struct {
+	// ID is the identity of the job. It is used in file paths and event
+	// metadata.
+	ID string
 
-	if err := os.WriteFile(filepath.Join(constants.StateDir, id+".yaml"), playbook, 0600); err != nil {
-		return nil, fmt.Errorf("cannot write playbook to temp file: %v", err)
+	// Events contain runner events, marshaled as raw JSON. Receive values from
+	// this channel to receive the current state of the run.
+	Events chan json.RawMessage
+
+	// Status is the final status of the run. It will be empty if the job has
+	// not completed.
+	Status string
+
+	privateDataDir      string
+	stopJobEventsWatch  chan struct{}
+	stopStatusFileWatch chan struct{}
+	timeout             time.Duration
+}
+
+// NewRunner creates a new Runner, uniquely identified by ID.
+func NewRunner(ID string, timeout time.Duration) *Runner {
+	return &Runner{
+		Events:              make(chan json.RawMessage),
+		privateDataDir:      filepath.Join(constants.StateDir, "runs"),
+		ID:                  ID,
+		stopJobEventsWatch:  make(chan struct{}),
+		stopStatusFileWatch: make(chan struct{}),
+		timeout:             timeout,
 	}
-	if err := os.MkdirAll(filepath.Join(privateDataDir, "artifacts", id, "job_events"), 0755); err != nil {
-		return nil, fmt.Errorf("cannot create private state dir: %v", err)
+}
+
+// Run begins running the provided playbook, using the given ID as the run
+// identity. It returns immediately after starting the ansible_runner process.
+// Events will be sent to the runner's Events channel. When the channel closes,
+// the run is complete.
+func (r *Runner) Run(playbook []byte) error {
+	// write playbook to the filesystem
+	playbookPath := filepath.Join(constants.StateDir, r.ID+".yaml")
+	if err := os.WriteFile(playbookPath, playbook, 0600); err != nil {
+		return fmt.Errorf("cannot write playbook file: path=%v err=%w", playbookPath, err)
+	}
+
+	// precreate the job_events directory so that we can watch for when events
+	// get written to it.
+	jobEventsPath := filepath.Join(r.privateDataDir, "artifacts", r.ID, "job_events")
+	if err := os.MkdirAll(jobEventsPath, 0755); err != nil {
+		return fmt.Errorf(
+			"cannot create job_events directory: directory=%v err=%w",
+			jobEventsPath,
+			err,
+		)
 	}
 
 	// precreate the status file so that we can watch for when it gets written
 	// to.
-	status, err := os.Create(filepath.Join(privateDataDir, "artifacts", id, "status"))
+	statusFilePath := filepath.Join(r.privateDataDir, "artifacts", r.ID, "status")
+	status, err := os.Create(statusFilePath)
 	if err != nil {
-		return nil, fmt.Errorf("cannot create status file: %v", err)
+		return fmt.Errorf("cannot create status file: file=%v err=%w", statusFilePath, err)
 	}
 	_ = status.Close()
 
-	// Guard the events channel with a WaitGroup to ensure that all goroutines
-	// that need to send to it are finished before closing the channel.
-	var wg sync.WaitGroup
-	wg.Add(1)
-	events := make(chan json.RawMessage)
+	// start a goroutine to watch for event files being written to the
+	// job_events directory. When a relevant event file is detected, it gets
+	// marshaled into JSON and sent to the events channel.
+	go r.watch(jobEventsPath, r.handleJobEvent, r.stopJobEventsWatch, nil, notify.InMovedTo)
+
+	// start a goroutine that watches for the "status" file. When it gets
+	// written to, its contents are read, and if the status is "failed", a final
+	// "failed" event is written to the events channel. No action is taken if
+	// the status is "successful".
+	go r.watch(
+		statusFilePath,
+		r.handleStatusFileEvent,
+		r.stopStatusFileWatch,
+		time.After(r.timeout),
+		notify.InCloseWrite,
+	)
 
 	// publish an "executor_on_start" event to signal cloud connector that a run
 	// event has started. This is run on a goroutine in case the events
@@ -56,185 +109,28 @@ func RunPlaybook(id string, playbook []byte, correlationID string) (chan json.Ra
 			"start_line": 0,
 			"end_line":   0,
 			"event_data": map[string]interface{}{
-				"crc_dispatcher_correlation_id": correlationID,
+				"crc_dispatcher_correlation_id": r.ID,
 			},
 		}
 		data, err := json.Marshal(event)
 		if err != nil {
-			log.Errorf("cannot marshal json: %v", err)
+			log.Errorf("cannot marshal json: err=%v", err)
 			return
 		}
-		events <- data
+		r.Events <- data
 	}()
-
-	// started is a closure that's passed to the StartProcess function as its
-	// exec.ProcessStartedFunc handler. This function is invoked on a goroutine
-	// after the process has been started. It exists as a named closure within
-	// this function to capture some relevant values that aren't otherwise
-	// passed in as part of the exec.ProcessStartedFunc signature (id,
-	// privateDataDir, etc.).
-	started := func(pid int, stdout, stderr io.ReadCloser) {
-		log.Debugf("process started: pid=%v runner_ident=%v", pid, id)
-
-		// start a goroutine to watch for event files being written to the
-		// job_events directory. When a relevant event file is detected, it gets
-		// marshaled into JSON and sent to the events channel.
-		jobEventsChan := make(chan notify.EventInfo, 1)
-		jobEventsDir := filepath.Join(privateDataDir, "artifacts", id, "job_events")
-		if err := notify.Watch(jobEventsDir, jobEventsChan, notify.InMovedTo); err != nil {
-			log.Errorf("failed to watch job_events dir: dir=%v err=%v", privateDataDir, err)
-			return
-		}
-		defer notify.Stop(jobEventsChan)
-		defer close(jobEventsChan)
-		go func(c chan notify.EventInfo) {
-			log.Tracef("start goroutine watching job_events dir: %v", jobEventsDir)
-			defer log.Tracef("stop goroutine watching job_events dir: %v", jobEventsDir)
-
-			for e := range c {
-				log.Debugf("notify event: event=%v path=%v", e.Event(), e.Path())
-				switch e.Event() {
-				case notify.InMovedTo:
-					if strings.HasSuffix(e.Path(), ".json") &&
-						!strings.Contains(e.Path(), "partial") {
-						data, err := os.ReadFile(e.Path())
-						if err != nil {
-							log.Errorf("cannot read file: file=%v error=%v", e.Path(), err)
-							continue
-						}
-
-						// Unmarshal the event data into an untyped map instead
-						// of a strictly typed structure. Using a strictly typed
-						// struct has the unintentional side effect of
-						// discarding any fields from the ansible-running event
-						// JSON that are not explicitly named in a struct. This
-						// allows the fields that are immaterial to the worker
-						// to still be included in the data structure.
-						var event map[string]interface{}
-						if err := json.Unmarshal(data, &event); err != nil {
-							log.Errorf("cannot unmarshal data: data=%v error=%v", data, err)
-							continue
-						}
-						eventData, ok := event["event_data"]
-						if !ok {
-							eventData = map[string]interface{}{}
-						}
-						if _, has := eventData.(map[string]interface{})["crc_dispatcher_correlation_id"]; !has {
-							eventData.(map[string]interface{})["crc_dispatcher_correlation_id"] = correlationID
-						}
-						eventData.(map[string]interface{})["crc_message_version"] = 1
-						event["event_data"] = eventData
-
-						// "counter" is a required field according to
-						// playbook-dispatcher's openapi schema. Messages
-						// without a "counter" field are rejected as invalid by
-						// the server.
-						// The same is true for "start_line" and "end_line".
-						// https://github.com/RedHatInsights/playbook-dispatcher/blob/22853a47c5bb85c94fdb2a645fef02758247d4ae/schema/playbookRunResponse.message.yaml#L58-L63
-						if _, has := event["counter"]; !has {
-							event["counter"] = -1
-						}
-						if _, has := event["start_line"]; !has {
-							event["start_line"] = 0
-						}
-						if _, has := event["end_line"]; !has {
-							event["end_line"] = 0
-						}
-
-						modifiedData, err := json.Marshal(event)
-						if err != nil {
-							log.Errorf("cannot marshal JSON: %v", err)
-							continue
-						}
-
-						events <- modifiedData
-						log.Infof("event sent: event=%+v", event)
-					}
-				}
-			}
-		}(jobEventsChan)
-
-		// start a goroutine that watches for the "status" file. When it gets
-		// written to, its contents are read, and if the status is "failed", a
-		// final "failed" event is written to the events channel. No action is
-		// taken if the status is "successful".
-		statusFileChan := make(chan notify.EventInfo, 1)
-		statusFilePath := filepath.Join(privateDataDir, "artifacts", id, "status")
-		if err := notify.Watch(statusFilePath, statusFileChan, notify.InCloseWrite); err != nil {
-			log.Errorf("failed to watch status file %v: %v", statusFilePath, err)
-		}
-		defer notify.Stop(statusFileChan)
-		defer close(statusFileChan)
-		go func(c chan notify.EventInfo) {
-			defer wg.Done()
-			log.Tracef("start goroutine watching status file: %v", statusFilePath)
-			defer log.Tracef("stop goroutine watching status file: %v", statusFilePath)
-
-			for e := range c {
-				log.Debugf("notify event: event=%v path=%v", e.Event(), e.Path())
-				switch e.Event() {
-				case notify.InCloseWrite:
-					data, err := os.ReadFile(e.Path())
-					if err != nil {
-						log.Errorf("failed to read status file: %v", err)
-						continue
-					}
-					switch string(data) {
-					case "failed":
-						// publish an "executor_on_failed" event to signal
-						// cloud connector that a run has failed.
-						event := map[string]interface{}{
-							"event":      "executor_on_failed",
-							"uuid":       uuid.New().String(),
-							"counter":    -1,
-							"start_line": 0,
-							"end_line":   0,
-							"event_data": map[string]interface{}{
-								"crc_dispatcher_correlation_id": correlationID,
-								"crc_dispatcher_error_code":     "UNDEFINED_ERROR",
-							},
-						}
-
-						data, err := json.Marshal(event)
-						if err != nil {
-							log.Errorf("cannot marshal JSON: %v", err)
-							continue
-						}
-						events <- json.RawMessage(data)
-						return
-					case "successful":
-						return
-					default:
-						log.Errorf("unsupported status case: %v", string(data))
-					}
-				}
-			}
-		}(statusFileChan)
-
-		// Block the remainder of the routine until the process exits. When it
-		// does, clean up.
-		err = exec.WaitProcess(pid, func(pid int, state *os.ProcessState) {
-			log.Debugf("process stopped: pid=%v runner_ident=%v exit=%v", pid, id, state.ExitCode())
-			wg.Wait()
-			close(events)
-		})
-		if err != nil {
-			log.Errorf("process stopped with error: %v", err)
-			return
-		}
-	}
 
 	err = exec.StartProcess(
 		"/usr/bin/python3",
 		[]string{
 			"-m",
 			"ansible_runner",
-			"run",
+			"start",
 			"--ident",
-			id,
+			r.ID,
 			"--playbook",
-			filepath.Join(constants.StateDir, id+".yaml"),
-			privateDataDir,
+			playbookPath,
+			r.privateDataDir,
 		},
 		[]string{
 			"PATH=/sbin:/bin:/usr/sbin:/usr/bin",
@@ -248,11 +144,154 @@ func RunPlaybook(id string, playbook []byte, correlationID string) (chan json.Ra
 				"ansible_collections",
 			),
 		},
-		started,
+		func(pid int, stdout, stderr io.ReadCloser) {
+			log.Infof("run started: pid=%v", pid)
+		},
 	)
+
 	if err != nil {
-		return nil, fmt.Errorf("cannot start process: %v", err)
+		return fmt.Errorf("cannot start process: err=%w", err)
 	}
 
-	return events, nil
+	return nil
+}
+
+// handleJobEvent is the handler function invoked each time a job_event file is
+// written to the job_events directory.
+func (r *Runner) handleJobEvent(event notify.EventInfo) {
+	if strings.HasSuffix(event.Path(), ".json") && !strings.Contains(event.Path(), "partial") {
+		data, err := os.ReadFile(event.Path())
+		if err != nil {
+			log.Errorf("cannot read file: file=%v error=%v", event.Path(), err)
+			return
+		}
+
+		// Unmarshal the ansibleEvent data into an untyped map instead of a
+		// strictly typed structure. Using a strictly typed struct has the
+		// unintentional side effect of discarding any fields from the
+		// ansible-running ansibleEvent JSON that are not explicitly named in a
+		// struct. This allows the fields that are immaterial to the worker to
+		// still be included in the data structure.
+		var ansibleEvent map[string]interface{}
+		if err := json.Unmarshal(data, &ansibleEvent); err != nil {
+			log.Errorf("cannot unmarshal data: data=%v error=%v", data, err)
+			return
+		}
+		eventData, ok := ansibleEvent["event_data"]
+		if !ok {
+			eventData = map[string]interface{}{}
+		}
+		if _, has := eventData.(map[string]interface{})["crc_dispatcher_correlation_id"]; !has {
+			eventData.(map[string]interface{})["crc_dispatcher_correlation_id"] = r.ID
+		}
+		eventData.(map[string]interface{})["crc_message_version"] = 1
+		ansibleEvent["event_data"] = eventData
+
+		// "counter" is a required field according to playbook-dispatcher's
+		// openapi schema. Messages without a "counter" field are rejected as
+		// invalid by the server. The same is true for "start_line" and
+		// "end_line".
+		// https://github.com/RedHatInsights/playbook-dispatcher/blob/22853a47c5bb85c94fdb2a645fef02758247d4ae/schema/playbookRunResponse.message.yaml#L58-L63
+		if _, has := ansibleEvent["counter"]; !has {
+			ansibleEvent["counter"] = -1
+		}
+		if _, has := ansibleEvent["start_line"]; !has {
+			ansibleEvent["start_line"] = 0
+		}
+		if _, has := ansibleEvent["end_line"]; !has {
+			ansibleEvent["end_line"] = 0
+		}
+
+		modifiedData, err := json.Marshal(ansibleEvent)
+		if err != nil {
+			log.Errorf("cannot marshal JSON: err=%v", err)
+			return
+		}
+
+		r.Events <- modifiedData
+		log.Debugf("event sent: event=%v", ansibleEvent)
+	}
+}
+
+// handleStatusFileEvent is the handler function invoked when the status file is
+// written to.
+func (r *Runner) handleStatusFileEvent(event notify.EventInfo) {
+	data, err := os.ReadFile(event.Path())
+	if err != nil {
+		log.Errorf("failed to read status file: err=%v", err)
+		return
+	}
+
+	status := string(data)
+	log.Infof("run complete: status=%v", status)
+
+	if status == "failed" {
+		// publish an "executor_on_failed" event to signal
+		// cloud connector that a run has failed.
+		event := map[string]interface{}{
+			"event":      "executor_on_failed",
+			"uuid":       uuid.New().String(),
+			"counter":    -1,
+			"start_line": 0,
+			"end_line":   0,
+			"event_data": map[string]interface{}{
+				"crc_dispatcher_correlation_id": r.ID,
+				"crc_dispatcher_error_code":     "UNDEFINED_ERROR",
+			},
+		}
+
+		data, err := json.Marshal(event)
+		if err != nil {
+			log.Errorf("cannot marshal JSON: err=%v", err)
+			return
+		}
+		r.Events <- json.RawMessage(data)
+	}
+
+	r.Status = status
+
+	// Close the events channel, signalling to callers that the job is complete.
+	close(r.Events)
+
+	// Signal the watch routines to stop and clean up. This is done on a
+	// goroutine to allow the executing handlers an opportunity to finish before
+	// the watch is removed.
+	go func() {
+		r.stopJobEventsWatch <- struct{}{}
+		r.stopStatusFileWatch <- struct{}{}
+	}()
+}
+
+// watch will set up a watch on the file or directory specified by path. Each
+// time an event occurs, the handler function is invoked on the event. To stop
+// the watch routine, send a value on the stop channel.
+func (r *Runner) watch(
+	path string,
+	handler func(event notify.EventInfo),
+	stop chan struct{},
+	timeout <-chan time.Time,
+	events ...notify.Event,
+) {
+	watchedEvents := make(chan notify.EventInfo, 1)
+	defer close(watchedEvents)
+
+	if err := notify.Watch(path, watchedEvents, events...); err != nil {
+		log.Errorf("cannot watch path for events: path=%v err=%v", path, err)
+		return
+	}
+	defer notify.Stop(watchedEvents)
+
+	log.Tracef("start watching for events: path=%v events=%v", path, events)
+	defer log.Tracef("stop watching for events: path=%v", path)
+	for {
+		select {
+		case <-timeout:
+			log.Infof("timeout elapsed watching for events: path=%v", path)
+			return
+		case <-stop:
+			return
+		case event := <-watchedEvents:
+			handler(event)
+		}
+	}
 }
