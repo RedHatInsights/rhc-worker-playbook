@@ -14,8 +14,8 @@ goldflags += ' -X "github.com/redhatinsights/rhc-worker-playbook/internal/consta
 goldflags += ' -X "github.com/redhatinsights/rhc-worker-playbook/internal/constants.PrefixDir=' + get_option('prefix') + '"'
 goldflags += ' -X "github.com/redhatinsights/rhc-worker-playbook/internal/constants.SysconfDir=' + get_option('sysconfdir') + '"'
 goldflags += ' -X "github.com/redhatinsights/rhc-worker-playbook/internal/constants.LocalStateDir=' + get_option('localstatedir') + '"'
-goldflags += ' -X "github.com/redhatinsights/rhc-worker-playbook/internal/constants.LibDir=' + get_option('libdir') + '"'
-goldflags += ' -X "github.com/redhatinsights/rhc-worker-playbook/internal/constants.DataDir=' + get_option('datadir') + '"'
+goldflags += ' -X "github.com/redhatinsights/rhc-worker-playbook/internal/constants.LibDir=' + get_option('prefix') / get_option('libdir') + '"'
+goldflags += ' -X "github.com/redhatinsights/rhc-worker-playbook/internal/constants.DataDir=' + get_option('prefix') / get_option('datadir') + '"'
 
 gobuildflags = get_option('gobuildflags')
 

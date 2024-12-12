@@ -8,6 +8,8 @@ import (
 	"mime/multipart"
 	"net/textproto"
 	"strings"
+	"sync"
+	"time"
 
 	"git.sr.ht/~spc/go-log"
 	"github.com/goccy/go-yaml"
@@ -43,6 +45,25 @@ func rx(
 		}
 	}
 
+	responseIntervalString, has := metadata["response_interval"]
+	if !has {
+		responseIntervalString = "300"
+	}
+	responseInterval, err := time.ParseDuration(responseIntervalString + "s")
+	if err != nil {
+		return fmt.Errorf("cannot parse response interval: %v", err)
+	}
+	if config.DefaultConfig.ResponseInterval > 0 {
+		responseInterval = config.DefaultConfig.ResponseInterval
+	}
+	if config.DefaultConfig.BatchEvents > 0 {
+		// Set the response interval to 500ms when batching events. This has the
+		// effect of matching the "<-timeout" case every time the channel select
+		// statement evaluates. This allows the same codepath to work when
+		// either batching events by quantity or by timeout.
+		responseInterval = 500 * time.Millisecond
+	}
+
 	if config.DefaultConfig.VerifyPlaybook {
 		d, err := verifyPlaybook(data, config.DefaultConfig.InsightsCoreGPGCheck)
 		if err != nil {
@@ -51,7 +72,8 @@ func rx(
 		data = d
 	}
 
-	events, err := ansible.RunPlaybook(id, data, correlationID)
+	runner := ansible.NewRunner(correlationID, 60*time.Second)
+	err = runner.Run(data)
 	if err != nil {
 		return fmt.Errorf("cannot run playbook: %v", err)
 	}
@@ -59,12 +81,68 @@ func rx(
 	// start a goroutine that receives ansible-runner events as they are
 	// emitted.
 	go func() {
-		// TODO: support metadata["response_interval"] batch processing
-		var cachedEvents []byte
-		for event := range events {
+		var cachedEvents []json.RawMessage
+		lock := sync.RWMutex{}
+
+		// start a goroutine that periodically (after the responseInterval
+		// duration elapses) transmit the cachedEvents slice. If a value is
+		// received on the done channel, the routine will return.
+		done := make(chan struct{})
+		timeout := time.Tick(responseInterval)
+		go func() {
+			batchStart := 0
+			log.Trace("start goroutine periodically transmitting events")
+			defer log.Trace("stop goroutine periodically transmitting events")
+			for {
+				select {
+				case <-done:
+					return
+				case <-timeout:
+					log.Tracef("%v timeout expired", responseInterval)
+					var batchEnd int
+
+					lock.RLock()
+					if config.DefaultConfig.BatchEvents > 0 {
+						batchEnd = batchStart + config.DefaultConfig.BatchEvents
+						if batchEnd > len(cachedEvents) {
+							batchEnd = len(cachedEvents)
+						}
+					} else {
+						batchStart = 0
+						batchEnd = len(cachedEvents)
+					}
+
+					// If the value of the current batch start has caught up to
+					// the known end of the cached events and the timeout has
+					// triggered again, skip this iteration.
+					if batchStart >= batchEnd {
+						continue
+					}
+
+					log.Tracef("cachedEvents[%v:%v]", batchStart, batchEnd)
+					err := transmitCachedEvents(
+						w,
+						id,
+						returnURL,
+						cachedEvents[batchStart:batchEnd],
+					)
+					lock.RUnlock()
+					if err != nil {
+						log.Errorf("cannot transmit events: %v", err)
+					}
+					batchStart = batchEnd
+				default:
+					continue
+				}
+			}
+		}()
+
+		for event := range runner.Events {
 			log.Debugf("ansible-runner event: %s", event)
 
-			cachedEvents = append(cachedEvents, append(event, '\n')...)
+			lock.Lock()
+			cachedEvents = append(cachedEvents, event)
+			lock.Unlock()
 
 			var runnerEvent map[string]interface{}
 			if err := json.Unmarshal(event, &runnerEvent); err != nil {
@@ -84,40 +162,69 @@ func rx(
 				log.Errorf("cannot emit event: event=%v error=%v", ipc.WorkerEventNameWorking, err)
 				continue
 			}
-
 		}
+		// The "events" channel will be closed when the Run method has finished
+		// handling ansible-runner events. At this point, signal the
+		// responseInterval goroutine to exit.
+		done <- struct{}{}
 
-		requestBody, outerContentType, err := buildRequestBody(
-			string(cachedEvents),
-			"runner-events",
-		)
+		// Transmit all the cached events one last time.
+		lock.RLock()
+		err := transmitCachedEvents(w, id, returnURL, cachedEvents)
+		lock.RUnlock()
 		if err != nil {
-			log.Errorf("cannot build request body: event=%+v error=%v", cachedEvents, err)
-			return
+			log.Errorf("cannot transmit events: %v", err)
 		}
-
-		responseCode, responseMetadata, responseBody, err := w.Transmit(
-			returnURL,
-			uuid.New().String(),
-			id,
-			map[string]string{
-				"Content-Type": outerContentType,
-			},
-			requestBody.Bytes(),
-		)
-		if err != nil {
-			log.Errorf("cannot transmit data: %v", err)
-			return
-		}
-		log.Debugf(
-			"received response: code=%v responseMetadata=%v",
-			responseCode,
-			responseMetadata,
-		)
-		log.Tracef("responseBody=%v", string(responseBody))
 
 		log.Infof("finished message: message-id=%v", id)
 	}()
+
+	return nil
+}
+
+// transmitCachedEvents sends the given cachedEvents slice as an HTTP multipart
+// request body and sends it via a D-Bus
+// com.redhat.Yggdrasil1.Dispatcher1.Transmit method call.
+func transmitCachedEvents(
+	w *worker.Worker,
+	id string,
+	returnURL string,
+	cachedEvents []json.RawMessage,
+) error {
+	body := strings.Builder{}
+	for _, cachedEvent := range cachedEvents {
+		_, err := body.Write(cachedEvent)
+		if err != nil {
+			return fmt.Errorf("cannot write to body: %v", err)
+		}
+		_ = body.WriteByte('\n')
+	}
+	requestBody, outerContentType, err := buildRequestBody(
+		body.String(),
+		"runner-events",
+	)
+	if err != nil {
+		return fmt.Errorf("cannot build request body: event=%+v error=%v", cachedEvents, err)
+	}
+
+	responseCode, responseMetadata, responseBody, err := w.Transmit(
+		returnURL,
+		uuid.New().String(),
+		id,
+		map[string]string{
+			"Content-Type": outerContentType,
+		},
+		requestBody.Bytes(),
+	)
+	if err != nil {
+		return fmt.Errorf("cannot transmit data: %v", err)
+	}
+	log.Debugf(
+		"received response: code=%v responseMetadata=%v",
+		responseCode,
+		responseMetadata,
+	)
+	log.Tracef("responseBody=%v", string(responseBody))
 
 	return nil
 }
