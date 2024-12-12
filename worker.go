@@ -72,7 +72,8 @@ func rx(
 		data = d
 	}
 
-	events, err := ansible.RunPlaybook(id, data, correlationID)
+	runner := ansible.NewRunner(correlationID, 60*time.Second)
+	err = runner.Run(data)
 	if err != nil {
 		return fmt.Errorf("cannot run playbook: %v", err)
 	}
@@ -136,7 +137,7 @@ func rx(
 			}
 		}()
 
-		for event := range events {
+		for event := range runner.Events {
 			log.Debugf("ansible-runner event: %s", event)
 
 			lock.Lock()
@@ -162,8 +163,8 @@ func rx(
 				continue
 			}
 		}
-		// The "events" channel will be closed when the RunPlaybook function has
-		// finished handling ansible-runner events. At this point, signal the
+		// The "events" channel will be closed when the Run method has finished
+		// handling ansible-runner events. At this point, signal the
 		// responseInterval goroutine to exit.
 		done <- struct{}{}
 
