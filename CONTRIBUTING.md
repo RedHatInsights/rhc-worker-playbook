@@ -108,7 +108,9 @@ This can then be piped to `pub` to publish the message:
 
 ```console 
 echo '"http://localhost:8000/insights_remove.yml"' | \
-  yggctl generate data-message --directive rhc_worker_playbook - | \
+  yggctl generate data-message \
+  --metadata '{"return_url": "http://localhost:8000/", "crc_dispatcher_correlation_id": "insights_remove"}' \
+  --directive rhc_worker_playbook - | \
   pub -broker tcp://localhost:1883 -topic yggdrasil/$(cat /var/lib/yggdrasil/client-id)/data/in
 ```
 
