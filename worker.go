@@ -131,10 +131,7 @@ func (e *EventManager) processEvents(runner *ansible.Runner) {
 	e.stopSendingEvents <- struct{}{}
 
 	// Transmit one final batch of all events.
-	e.cachedEventsLock.RLock()
-	length := len(e.cachedEvents)
-	e.cachedEventsLock.RUnlock()
-	if err := e.transmitEvents(0, length); err != nil {
+	if err := e.transmitEvents(e.cachedEvents); err != nil {
 		log.Errorf("cannot transmit events: err=%v", err)
 	}
 
@@ -167,21 +164,23 @@ func (e *EventManager) transmitCachedEvents() {
 				batchStart = 0
 				batchEnd = len(e.cachedEvents)
 			}
-			e.cachedEventsLock.RUnlock()
 
 			// If the value of the current batch start has caught up to the
 			// known end of the cached events and the timeout has triggered
 			// again, skip this iteration.
 			if batchStart >= batchEnd {
+				e.cachedEventsLock.RUnlock()
 				continue
 			}
 
+			cachedEvents := append([]json.RawMessage{}, e.cachedEvents[batchStart:batchEnd]...)
+			e.cachedEventsLock.RUnlock()
 			log.Debugf(
 				"transmitting cached events: batchStart=%v batchEnd=%v",
 				batchStart,
 				batchEnd,
 			)
-			if err := e.transmitEvents(batchStart, batchEnd); err != nil {
+			if err := e.transmitEvents(cachedEvents); err != nil {
 				log.Errorf("cannot transmit events: err=%v", err)
 				continue
 			}
@@ -191,17 +190,14 @@ func (e *EventManager) transmitCachedEvents() {
 	}
 }
 
-// transmitEvents sends a subslice of cachedEvents as an HTTP multipart
+// transmitEvents sends a slice of json.RawMessage values as an HTTP multipart
 // request body and sends it via a D-Bus
 // com.redhat.Yggdrasil1.Dispatcher1.Transmit method call.
-func (e *EventManager) transmitEvents(start, end int) error {
-	e.cachedEventsLock.RLock()
-	defer e.cachedEventsLock.RUnlock()
-
+func (e *EventManager) transmitEvents(events []json.RawMessage) error {
 	// Build a JSONL data buffer.
 	body := strings.Builder{}
-	for _, cachedEvent := range e.cachedEvents[start:end] {
-		_, err := body.Write(cachedEvent)
+	for _, event := range events {
+		_, err := body.Write(event)
 		if err != nil {
 			return fmt.Errorf("cannot write to body: err=%w", err)
 		}
