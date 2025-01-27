@@ -15,15 +15,15 @@ class DispatcherStub(object):
             channel: A grpc.Channel.
         """
         self.Register = channel.unary_unary(
-                '/yggdrasil.Dispatcher/Register',
-                request_serializer=yggdrasil__pb2.RegistrationRequest.SerializeToString,
-                response_deserializer=yggdrasil__pb2.RegistrationResponse.FromString,
-                )
+            "/yggdrasil.Dispatcher/Register",
+            request_serializer=yggdrasil__pb2.RegistrationRequest.SerializeToString,
+            response_deserializer=yggdrasil__pb2.RegistrationResponse.FromString,
+        )
         self.Send = channel.unary_unary(
-                '/yggdrasil.Dispatcher/Send',
-                request_serializer=yggdrasil__pb2.Data.SerializeToString,
-                response_deserializer=yggdrasil__pb2.Receipt.FromString,
-                )
+            "/yggdrasil.Dispatcher/Send",
+            request_serializer=yggdrasil__pb2.Data.SerializeToString,
+            response_deserializer=yggdrasil__pb2.Receipt.FromString,
+        )
 
 
 class DispatcherServicer(object):
@@ -34,72 +34,96 @@ class DispatcherServicer(object):
         handling the specified type of work.
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
 
     def Send(self, request, context):
-        """Send is called by a worker to send data to the dispatcher.
-        """
+        """Send is called by a worker to send data to the dispatcher."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
 
 
 def add_DispatcherServicer_to_server(servicer, server):
     rpc_method_handlers = {
-            'Register': grpc.unary_unary_rpc_method_handler(
-                    servicer.Register,
-                    request_deserializer=yggdrasil__pb2.RegistrationRequest.FromString,
-                    response_serializer=yggdrasil__pb2.RegistrationResponse.SerializeToString,
-            ),
-            'Send': grpc.unary_unary_rpc_method_handler(
-                    servicer.Send,
-                    request_deserializer=yggdrasil__pb2.Data.FromString,
-                    response_serializer=yggdrasil__pb2.Receipt.SerializeToString,
-            ),
+        "Register": grpc.unary_unary_rpc_method_handler(
+            servicer.Register,
+            request_deserializer=yggdrasil__pb2.RegistrationRequest.FromString,
+            response_serializer=yggdrasil__pb2.RegistrationResponse.SerializeToString,
+        ),
+        "Send": grpc.unary_unary_rpc_method_handler(
+            servicer.Send,
+            request_deserializer=yggdrasil__pb2.Data.FromString,
+            response_serializer=yggdrasil__pb2.Receipt.SerializeToString,
+        ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
-            'yggdrasil.Dispatcher', rpc_method_handlers)
+        "yggdrasil.Dispatcher", rpc_method_handlers
+    )
     server.add_generic_rpc_handlers((generic_handler,))
 
 
- # This class is part of an EXPERIMENTAL API.
+# This class is part of an EXPERIMENTAL API.
 class Dispatcher(object):
     """Missing associated documentation comment in .proto file."""
 
     @staticmethod
-    def Register(request,
+    def Register(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
             target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/yggdrasil.Dispatcher/Register',
+            "/yggdrasil.Dispatcher/Register",
             yggdrasil__pb2.RegistrationRequest.SerializeToString,
             yggdrasil__pb2.RegistrationResponse.FromString,
-            options, channel_credentials,
-            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+        )
 
     @staticmethod
-    def Send(request,
+    def Send(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
             target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/yggdrasil.Dispatcher/Send',
+            "/yggdrasil.Dispatcher/Send",
             yggdrasil__pb2.Data.SerializeToString,
             yggdrasil__pb2.Receipt.FromString,
-            options, channel_credentials,
-            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+        )
 
 
 class WorkerStub(object):
@@ -112,53 +136,65 @@ class WorkerStub(object):
             channel: A grpc.Channel.
         """
         self.Send = channel.unary_unary(
-                '/yggdrasil.Worker/Send',
-                request_serializer=yggdrasil__pb2.Data.SerializeToString,
-                response_deserializer=yggdrasil__pb2.Receipt.FromString,
-                )
+            "/yggdrasil.Worker/Send",
+            request_serializer=yggdrasil__pb2.Data.SerializeToString,
+            response_deserializer=yggdrasil__pb2.Receipt.FromString,
+        )
 
 
 class WorkerServicer(object):
     """Missing associated documentation comment in .proto file."""
 
     def Send(self, request, context):
-        """Send is called by the dispatcher to send data to a worker.
-        """
+        """Send is called by the dispatcher to send data to a worker."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
 
 
 def add_WorkerServicer_to_server(servicer, server):
     rpc_method_handlers = {
-            'Send': grpc.unary_unary_rpc_method_handler(
-                    servicer.Send,
-                    request_deserializer=yggdrasil__pb2.Data.FromString,
-                    response_serializer=yggdrasil__pb2.Receipt.SerializeToString,
-            ),
+        "Send": grpc.unary_unary_rpc_method_handler(
+            servicer.Send,
+            request_deserializer=yggdrasil__pb2.Data.FromString,
+            response_serializer=yggdrasil__pb2.Receipt.SerializeToString,
+        ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
-            'yggdrasil.Worker', rpc_method_handlers)
+        "yggdrasil.Worker", rpc_method_handlers
+    )
     server.add_generic_rpc_handlers((generic_handler,))
 
 
- # This class is part of an EXPERIMENTAL API.
+# This class is part of an EXPERIMENTAL API.
 class Worker(object):
     """Missing associated documentation comment in .proto file."""
 
     @staticmethod
-    def Send(request,
+    def Send(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
             target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/yggdrasil.Worker/Send',
+            "/yggdrasil.Worker/Send",
             yggdrasil__pb2.Data.SerializeToString,
             yggdrasil__pb2.Receipt.FromString,
-            options, channel_credentials,
-            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+        )
