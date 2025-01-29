@@ -6,5 +6,6 @@ prepare:
       how: install
       package:
         - rhc
+        - rhc-worker-playbook
 execute:
     how: tmt
