@@ -23,6 +23,11 @@ pip install -r integration-tests/requirements.txt
 pytest --junit-xml=./junit.xml -v integration-tests  -o  log_cli=true --log-level=DEBUG
 retval=$?
 
+busctl --list --no-pager
+rpm -qa | grep rhc
+rpm -qa | grep yggdrasil
+systemctl status com.redhat.Yggdrasil1.Worker1.rhc_worker_playbook --no-pager
+
 if [ -d "$TMT_PLAN_DATA" ]; then
   cp ./junit.xml "$TMT_PLAN_DATA/junit.xml"
 fi
