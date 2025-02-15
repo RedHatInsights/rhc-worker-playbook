@@ -309,7 +309,10 @@ def serve():
     config = _loadConfig()
 
     # open the channel to ygg Dispatcher
-    channel = grpc.insecure_channel(YGG_SOCKET_ADDR)
+    channel = grpc.insecure_channel(
+        YGG_SOCKET_ADDR,
+        options=[("grpc.enable_http_proxy", 0)],
+    )
     dispatcher = yggdrasil_pb2_grpc.DispatcherStub(channel)
     _log("Registering with directive %s..." % config["directive"])
     registrationResponse = dispatcher.Register(
