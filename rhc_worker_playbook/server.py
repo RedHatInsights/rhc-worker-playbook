@@ -224,10 +224,25 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
             verifyProc = Popen(args, stdin=PIPE, stdout=PIPE, stderr=PIPE, env=env)
             stdout, stderr = verifyProc.communicate(input=playbook_str)
             if verifyProc.returncode != 0:
-                _log(
-                    "ERROR: Unable to verify playbook:\n%s\n%s"
-                    % (stdout.decode("utf-8"), stderr.decode("utf-8"))
+                error_details = "%s\n%s" % (
+                    stdout.decode("utf-8"),
+                    stderr.decode("utf-8"),
                 )
+                failed_event = executor_on_failed(
+                    correlation_id=crc_dispatcher_correlation_id,
+                    error_code="ANSIBLE_PLAYBOOK_SIGNATURE_VALIDATION_FAILED",
+                    error_details=error_details,
+                )
+                events_to_return = _composeDispatcherMessage(
+                    [
+                        executor_on_start(correlation_id=crc_dispatcher_correlation_id),
+                        failed_event,
+                    ],
+                    return_url,
+                    response_to,
+                )
+                _log("ERROR: Unable to verify playbook: %s" % failed_event)
+                self.dispatcher.Send(events_to_return)
                 raise Exception
             verified = stdout.decode("utf-8")
             _log("Playbook verified.")
