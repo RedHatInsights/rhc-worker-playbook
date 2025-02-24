@@ -24,8 +24,10 @@ jobs:
     additional_repos:
       - "copr://@yggdrasil/latest"
     targets:
-      - centos-stream-9
-      - rhel-9
+      - centos-stream-9-aarch64
+      - centos-stream-9-x86_64
+      - rhel-9-aarch64
+      - rhel-9-x86_64
 
   - job: copr_build
     trigger: commit
@@ -33,8 +35,10 @@ jobs:
     owner: "@yggdrasil"
     project: latest
     targets:
-      - centos-stream-9
-      - rhel-9
+      - centos-stream-9-aarch64
+      - centos-stream-9-x86_64
+      - rhel-9-aarch64
+      - rhel-9-x86_64
 
   - job: tests
     trigger: pull_request
