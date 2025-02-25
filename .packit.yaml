@@ -25,7 +25,6 @@ jobs:
       - "copr://@yggdrasil/latest"
     targets:
       - centos-stream-9
-      - rhel-8
       - rhel-9
 
   - job: copr_build
@@ -35,7 +34,6 @@ jobs:
     project: latest
     targets:
       - centos-stream-9
-      - rhel-8
       - rhel-9
 
   - job: tests
@@ -55,9 +53,6 @@ jobs:
     trigger: pull_request
     identifier: "unit/rhel"
     targets:
-      rhel-8-x86_64:
-        distros:
-          - RHEL-8-Nightly
       rhel-9-x86_64:
         distros:
           - RHEL-9-Nightly
