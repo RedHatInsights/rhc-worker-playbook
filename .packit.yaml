@@ -10,6 +10,8 @@ srpm_build_deps:
   - rpm-build
 
 actions:
+  post-upstream-clone:
+    - make rhc-worker-playbook.spec
   get-current-version:
     - awk '/^Version:/ {print $2;}' rhc-worker-playbook.spec
   create-archive:

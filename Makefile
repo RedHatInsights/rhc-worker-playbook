@@ -2,6 +2,10 @@ PYTHON		?= python3
 
 PKGNAME=rhc-worker-playbook
 PKGVER = $(shell $(PYTHON) setup.py --version | tr -d '\n')
+_SHORT_COMMIT = $(shell git rev-parse --short HEAD | tr -d '\n')
+_LATEST_TAG = $(shell git describe --tags --abbrev=0 --always | tr -d '\n')
+_NUM_COMMITS_SINCE_LATEST_TAG = $(shell git rev-list $(_LATEST_TAG)..HEAD --count | tr -d '\n')
+RELEASE = $(shell printf "99.%s.git.%s" $(_NUM_COMMITS_SINCE_LATEST_TAG) $(_SHORT_COMMIT))
 
 PREFIX		?= /usr/local
 LIBDIR		?= $(PREFIX)/lib
@@ -44,9 +48,17 @@ uninstall:
 clean:
 	rm rhc_worker_playbook/constants.py
 	rm scripts/rhc-worker-playbook.worker
+	rm rhc-worker-playbook.spec
 
 .PHONY: tarball
 tarball: dist/$(PKGNAME)-$(PKGVER).tar.gz
 
 dist/$(PKGNAME)-$(PKGVER).tar.gz:
 	$(PYTHON) setup.py sdist
+
+.PHONY: rhc-worker-playbook.spec
+rhc-worker-playbook.spec: rhc-worker-playbook.spec.in
+	sed \
+		-e 's,[@]PKGVER[@],$(PKGVER),g' \
+		-e 's,[@]RELEASE[@],$(RELEASE),g' \
+		$< > $@.tmp && mv $@.tmp $@
