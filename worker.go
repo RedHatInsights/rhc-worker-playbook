@@ -319,7 +319,12 @@ func verifyPlaybook(data []byte, insightsCoreGPGCheck bool) ([]byte, error) {
 func buildRequestBody(body string, filename string) (*bytes.Buffer, string, error) {
 	requestBody := &bytes.Buffer{}
 	writer := multipart.NewWriter(requestBody)
-	defer writer.Close()
+	defer func() {
+		closeErr := writer.Close()
+		if closeErr != nil {
+			log.Errorf("cannot close request body writer: %v", closeErr)
+		}
+	}()
 
 	// Set the inner content-type accordingly, as required by ingress.
 	// https://github.com/RedHatInsights/insights-ingress-go/blob/ada891f3dff3f402e4c03ef8aa3a34908cc0a4dc/README.md?plain=1#L46
