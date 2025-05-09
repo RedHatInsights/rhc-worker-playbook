@@ -1,10 +1,18 @@
 #!/bin/bash
 set -ux
 
-# Install required packages
-dnf --setopt install_weak_deps=False install -y \
-  podman git-core python3-pip python3-pytest rhc-worker-playbook yggdrasil
+RHEL_VERSION=$(rpm -E %rhel)
 
+# Install required packages
+if [[ "$RHEL_VERSION" -ge 10 ]]; then
+	dnf --setopt install_weak_deps=False install -y \
+  	podman git-core python3-pip python3-pytest rhc-worker-playbook yggdrasil
+else
+	dnf --setopt install_weak_deps=False install -y \
+        podman git-core python3-pip python3-pytest rhc-worker-playbook
+fi
+
+#Install test rpms for gating jobs
 if [[ -n "${TEST_RPMS+x}" ]]; then
 	echo "Installing RPMs: ${TEST_RPMS}"
 	dnf -y install --allowerasing ${TEST_RPMS}
