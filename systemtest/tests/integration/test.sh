@@ -5,6 +5,11 @@ set -ux
 dnf --setopt install_weak_deps=False install -y \
   podman git-core python3-pip python3-pytest rhc-worker-playbook yggdrasil
 
+if [[ -n "${TEST_RPMS+x}" ]]; then
+	echo "Installing RPMs: ${TEST_RPMS}"
+	dnf -y install --allowerasing ${TEST_RPMS}
+fi
+
 # get to project root
 cd $(git rev-parse --show-toplevel)
 
