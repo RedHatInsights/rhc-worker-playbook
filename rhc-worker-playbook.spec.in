@@ -20,6 +20,7 @@ Requires: ansible-core
 Requires: python3.9dist(requests)
 Requires: python3.9dist(pyyaml)
 Requires: python3.9dist(toml)
+Requires: python3.9dist(jsonschema)
 Requires: rhc
 BuildRequires: make
 BuildRequires: python3-devel
