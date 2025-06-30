@@ -26,13 +26,8 @@ import yaml
 from requests import Request
 from rhc_worker_playbook.dispatcher_events import executor_on_start, executor_on_failed
 from rhc_worker_playbook.protocol import yggdrasil_pb2_grpc, yggdrasil_pb2
-
-
-def _log(message: str) -> None:
-    """
-    Send message over unbuffered stdout for RHC to log
-    """
-    print(message + "\n", flush=True)
+from rhc_worker_playbook.events import Events
+from rhc_worker_playbook.log import log
 
 
 def _newlineDelimited(events):
@@ -100,7 +95,7 @@ def _loadConfig():
         with open(CONFIG_FILE) as _f:
             _config = toml.load(_f)
     else:
-        _log("WARNING: Config file does not exist: %s. Using defaults." % CONFIG_FILE)
+        log("WARNING: Config file does not exist: %s. Using defaults." % CONFIG_FILE)
 
     parsedConfig = {
         "directive": _config.get("directive", "rhc-worker-playbook"),
@@ -112,29 +107,12 @@ def _loadConfig():
     return parsedConfig
 
 
-class Events(list):
-    """
-    Extension of list to receive ansible-runner events
-    """
-
-    def __init__(self):
-        pass
-
-    def addEvent(self, event):
-        try:
-            event.get("event_data", {}).get("res", {}).pop("ansible_facts", None)
-        except AttributeError:
-            # one of the fields was null/empty
-            pass
-        self.append(event)
-
-
 class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
 
     def __init__(self, *args, **kwargs):
         dispatcher = kwargs.get("dispatcher", None)
         if not dispatcher:
-            _log("No dispatcher parameter was provided to the WorkerService")
+            log("No dispatcher parameter was provided to the WorkerService")
             raise Exception
         self.dispatcher = dispatcher
         self._basic_path = "/sbin:/bin:/usr/sbin:/usr/bin"
@@ -167,28 +145,28 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
             response_interval = request.metadata.get("response_interval")
             return_url = request.metadata.get("return_url")
         except LookupError as e:
-            _log("ERROR: Missing attribute in message: %s" % e)
+            log("ERROR: Missing attribute in message: %s" % e)
             raise
 
         if not crc_dispatcher_correlation_id:
-            _log("WARNING: No crc_dispatcher_correlation_id")
+            log("WARNING: No crc_dispatcher_correlation_id")
 
         if not return_url:
-            _log("WARNING: No return_url")
+            log("WARNING: No return_url")
 
         if not response_interval:
-            _log("WARNING: No response_interval. Defaulting to 300")
+            log("WARNING: No response_interval. Defaulting to 300")
             response_interval = 300
         else:
             try:
                 response_interval = float(response_interval)
             except (TypeError, ValueError) as e:
-                _log("ERROR: Invalid response_interval")
-                _log(str(e))
+                log("ERROR: Invalid response_interval")
+                log(str(e))
                 raise
 
         if config["verify_playbook"]:
-            _log("Verifying playbook...")
+            log("Verifying playbook...")
             args = ["/usr/libexec/rhc-playbook-verifier", "--stdin"]
             env = {"PATH": self._basic_path}
             verifyProc = Popen(args, stdin=PIPE, stdout=PIPE, stderr=PIPE, env=env)
@@ -211,19 +189,19 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
                     return_url,
                     response_to,
                 )
-                _log("ERROR: Unable to verify playbook: %s" % failed_event)
+                log("ERROR: Unable to verify playbook: %s" % failed_event)
                 self.dispatcher.Send(events_to_return)
                 raise Exception
             verified = stdout.decode("utf-8")
-            _log("Playbook verified.")
+            log("Playbook verified.")
         else:
-            _log("WARNING: Playbook verification disabled.")
+            log("WARNING: Playbook verification disabled.")
             verified = playbook_str.decode("utf-8")
         try:
             playbook = yaml.safe_load(verified)
         except yaml.composer.ComposerError as e:
-            _log("ERROR: Could not parse playbook")
-            _log(str(e))
+            log("ERROR: Could not parse playbook")
+            log(str(e))
             raise
 
         for item in playbook:
@@ -234,7 +212,7 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
                 # vars was null/empty
                 pass
 
-        _log("Starting playbook run...")
+        log("Starting playbook run...")
         # required event for cloud connector
         on_start = executor_on_start(correlation_id=crc_dispatcher_correlation_id)
         events.addEvent(on_start)
@@ -259,7 +237,7 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
             runnerThread.join(response_interval)
             if runnerThread.is_alive():
                 # hit the interval, post events
-                _log("Hit the response interval. Posting current status...")
+                log("Hit the response interval. Posting current status...")
                 returnedEvents = _composeDispatcherMessage(
                     events, return_url, response_to
                 )
@@ -269,7 +247,7 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
             # last event sould be the failure, find the reason
             errorCode, errorDetails = _parseFailure(events[-1])
             if errorCode == "ANSIBLE_PLAYBOOK_NOT_INSTALLED":
-                _log(
+                log(
                     "WARNING: The rhc-worker-playbook package requires the ansible package to be installed."
                 )
             # required event for cloud connector
@@ -281,12 +259,12 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
             events.addEvent(on_failed)
 
         # send the final message after playbook completed
-        _log("Playbook run complete.")
-        _log(str(events))
+        log("Playbook run complete.")
+        log(str(events))
         returnedEvents = _composeDispatcherMessage(events, return_url, response_to)
-        _log("Posting events...")
+        log("Posting events...")
         self.dispatcher.Send(returnedEvents)
-        _log("Post complete.")
+        log("Post complete.")
 
 
 def serve():
@@ -303,7 +281,7 @@ def serve():
         options=[("grpc.enable_http_proxy", 0)],
     )
     dispatcher = yggdrasil_pb2_grpc.DispatcherStub(channel)
-    _log("Registering with directive %s..." % config["directive"])
+    log("Registering with directive %s..." % config["directive"])
     registrationResponse = dispatcher.Register(
         yggdrasil_pb2.RegistrationRequest(
             handler=config["directive"], detached_content=True, pid=os.getpid()
@@ -311,9 +289,9 @@ def serve():
     )
     registered = registrationResponse.registered
     if not registered:
-        _log("ERROR: Could not register rhc-worker-playbook.")
+        log("ERROR: Could not register rhc-worker-playbook.")
         sys.exit(1)
-    _log("Registered rhc-worker-playbook.")
+    log("Registered rhc-worker-playbook.")
     address = registrationResponse.address.replace("@", "unix-abstract:")
 
     # create server
@@ -323,7 +301,7 @@ def serve():
             WorkerService(dispatcher=dispatcher), server
         )
     except ValueError as e:
-        _log(str(e))
+        log(str(e))
         raise
     server.add_insecure_port(address)
 
@@ -335,7 +313,7 @@ def serve():
 def _get_ygg_socket_addr() -> str:
     ygg_socket_addr = os.environ.get("YGG_SOCKET_ADDR")
     if not ygg_socket_addr:
-        _log("Missing YGG_SOCKET_ADDR environment variable")
+        log("Missing YGG_SOCKET_ADDR environment variable")
         sys.exit(1)
     # massage the value for python grpc
     return ygg_socket_addr.replace("unix:@", "unix-abstract:")

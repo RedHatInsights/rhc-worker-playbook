@@ -1,3 +1,4 @@
 include Makefile
 include rhc-worker-playbook.toml
 include rhc_worker_playbook/constants.py.in
+exclude rhc_worker_playbook/test_*.py
