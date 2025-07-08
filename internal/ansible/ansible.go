@@ -250,6 +250,11 @@ func (r *Runner) handleStatusFileEvent(event notify.EventInfo) {
 
 	r.Status = status
 
+	r.end()
+}
+
+// end monitoring playbook event output
+func (r *Runner) end() {
 	// Close the events channel, signalling to callers that the job is complete.
 	close(r.Events)
 
@@ -287,6 +292,8 @@ func (r *Runner) watch(
 		select {
 		case <-timeout:
 			log.Infof("timeout elapsed watching for events: path=%v", path)
+			// since the status file handler is not invoked, clean up channels here, otherwise it will upload forever
+			r.end()
 			return
 		case <-stop:
 			return
