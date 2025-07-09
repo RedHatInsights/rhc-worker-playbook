@@ -187,6 +187,10 @@ func (r *Runner) handleJobEvent(event notify.EventInfo) {
 			log.Errorf("cannot unmarshal data: data=%v error=%v", data, err)
 			return
 		}
+
+		// log the full event
+		log.Debugf("received job event: %v", prettyJson(data))
+
 		eventData, ok := ansibleEvent["event_data"]
 		if !ok {
 			eventData = map[string]interface{}{}
@@ -218,8 +222,21 @@ func (r *Runner) handleJobEvent(event notify.EventInfo) {
 			return
 		}
 
-		r.Events <- modifiedData
-		log.Debugf("event sent: event=%v", ansibleEvent)
+		// filter the event by narrowing to the playbook-dispatcher types
+		var filteredEvent PlaybookRunResponseMessageYamlEventsElem
+		if err := json.Unmarshal(modifiedData, &filteredEvent); err != nil {
+			log.Errorf("cannot unmarshal JSON: err=%v", err)
+			return
+		}
+
+		filteredModifiedData, err := json.Marshal(filteredEvent)
+		if err != nil {
+			log.Errorf("cannot marshal JSON: err=%v", err)
+			return
+		}
+
+		r.Events <- filteredModifiedData
+		log.Debugf("event sent: event=%v", prettyJson(filteredModifiedData))
 	}
 }
 
@@ -311,4 +328,18 @@ func (r *Runner) watch(
 			handler(event)
 		}
 	}
+}
+
+func prettyJson(jsonBytes []byte) string {
+	var jsonObject map[string]any
+	if err := json.Unmarshal(jsonBytes, &jsonObject); err != nil {
+		log.Errorf("cannot unmarshal JSON: err=%v", err)
+		return ""
+	}
+	pretty, err := json.MarshalIndent(jsonObject, "", "\t")
+	if err != nil {
+		log.Errorf("cannot marshal JSON: err=%v", err)
+		return fmt.Sprintf("%v", jsonObject)
+	}
+	return string(pretty)
 }

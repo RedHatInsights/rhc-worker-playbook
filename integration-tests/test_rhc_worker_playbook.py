@@ -11,6 +11,7 @@ from utils import (
     publish_message,
     mqtt_data_topic,
     verify_playbook_execution_status,
+    verify_uploaded_event_runner_data_is_filtered,
 )
 
 logger = logging.getLogger(__name__)
@@ -35,9 +36,11 @@ def test_playbook_execution_local_broker(
             5. Publish the message to the MQTT topic
             6. Verify the playbook execution status
             7. Verify the test file is created
+            8. Verify that the output is correctly filtered (reduced to minimum playbook dispatcher spec properties)
         expected_results:
             1. The playbook execution is successful
             2. The test file is created
+            3. The output is reduced to playbook dispatcher defined properties
     """
     playbook_url = "http://localhost:8000/resources/create_file.yml"
 
@@ -64,10 +67,9 @@ def test_playbook_execution_local_broker(
     )
     assert os.path.exists(rhc_worker_test_file), "Test file not created."
     
-    # TODO: re-add this test when the other PR is merged
-    # logger.info("Verifying job event data is being correctly filtered......")
+    logger.info("Verifying job event data is being correctly filtered......")
     
-    # assert verify_uploaded_event_runner_data_is_filtered(http_server.post_body)
+    assert verify_uploaded_event_runner_data_is_filtered(http_server.post_body)
 
 @pytest.mark.skipif(
     pytest.rhel_major_version == "unknown" or int(pytest.rhel_major_version) < 10,
