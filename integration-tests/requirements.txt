@@ -3,3 +3,4 @@ pyyaml
 sh
 paho-mqtt
 distro
+requests-toolbelt
