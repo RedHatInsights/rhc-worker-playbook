@@ -120,6 +120,14 @@ func (r *Runner) Run(playbook []byte) error {
 		r.Events <- data
 	}()
 
+	// typically /var/lib/rhc-worker-playbook/ansible-home
+	// created automatically by ansible_runner
+	ansibleHomePath := filepath.Join(constants.StateDir, "ansible-home")
+
+	// typically /var/lib/rhc-worker-playbook/ansible-home/remote-tmp
+	// created automatically by ansible_runner
+	ansibleRemoteTmpPath := filepath.Join(ansibleHomePath, "remote-tmp")
+
 	err = exec.StartProcess(
 		"/usr/bin/python3",
 		[]string{
@@ -136,6 +144,8 @@ func (r *Runner) Run(playbook []byte) error {
 			"PATH=/sbin:/bin:/usr/sbin:/usr/bin",
 			"PYTHONPATH=" + filepath.Join(constants.LibDir, "rhc-worker-playbook"),
 			"PYTHONDONTWRITEBYTECODE=1",
+			"ANSIBLE_HOME=" + ansibleHomePath,
+			"ANSIBLE_REMOTE_TMP=" + ansibleRemoteTmpPath,
 			"ANSIBLE_COLLECTIONS_PATH=" + filepath.Join(
 				constants.DataDir,
 				"rhc-worker-playbook",
