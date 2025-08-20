@@ -140,33 +140,62 @@ class Events(list):
         # event spec from playbook dispatcher for filtering events to reduce message size
         self.eventSchema = eventSchema
 
-    def _filterEvent(self, event, schema):
+    # filter event data based on the playbook dispatcher job event schema
+    def _filter_event(self, event, schema):
         properties = schema.get('properties', {})
-        filteredEvent = {}
+        filtered_event = {}
 
         for key, value in event.items():
             prop_schema = properties.get(key)
-            if prop_schema:
-                prop_type = prop_schema.get('type')
+            if not prop_schema:
+                continue
 
-                if prop_type == 'object':
-                    filteredEvent[key] = self._filterEvent(value, prop_schema)
-                elif prop_type == 'array':
-                    # there are currently no array types in PBD, but here for completeness' sake
-                    if isinstance(value, list):
-                        filteredEvent[key] = [
-                            self._filterEvent(item, prop_schema['items'])
-                            if prop_schema['items'].get('type') == 'object' else item
-                            for item in value
-                        ]
-                    else:
-                        # type mismatch, ignore
-                        pass
+            prop_type = prop_schema.get('type')
+
+            if prop_type == 'object':
+                
+                # The schema may contain object types with nested properties, so recursively
+                #   filter the nested data (value) with the nested schema (prop_schema).
+                #
+                #   I.e., "event_data" will have nested data that needs to be filtered
+                #       down to the properties in the schema:
+                #
+                #   properties:
+                #       ...
+                #       event_data:
+                #           type: object
+                #           properties:
+                #               playbook:
+                #                   ...
+                #               playbook_uuid:
+                #                   ...
+                #               host:
+                #                   ...
+                #               ...
+                #       ...
+                #
+                #   Specifically speaking, filtered_event["event_data"] will be set to
+                #       event["event_data"], with the inner keys filtered based on 
+                #       the properties of the provided "event_data" object schema
+                #       -- filtered down to "playbook", "playbook_uuid", "host," etc.
+                filtered_event[key] = self._filter_event(value, prop_schema)
+
+            elif prop_type == 'array':
+                # there are currently no array types in PBD, but here for completeness' sake
+                if isinstance(value, list):
+                    filtered_event[key] = [
+                        self._filter_event(item, prop_schema['items'])
+                        if prop_schema['items'].get('type') == 'object' else item
+                        for item in value
+                    ]
                 else:
-                    # basic type
-                    filteredEvent[key] = value
+                    # type mismatch, ignore
+                    pass
+            else:
+                # basic type
+                filtered_event[key] = value
 
-        return filteredEvent
+        return filtered_event
 
     def addEvent(self, event):
         try:
@@ -179,7 +208,7 @@ class Events(list):
         _log(str(event))
 
         # send the filtered event back to RHC
-        self.append(self._filterEvent(event, self.eventSchema))
+        self.append(self._filter_event(event, self.eventSchema))
         
         # this method must return True for ansible to save job events to disk
         #   at RUNNER_ARTIFACTS_DIR/{runId}/job_events
