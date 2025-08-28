@@ -236,43 +236,74 @@ func (r *Runner) handleJobEvent(event notify.EventInfo) {
 func filterEvent(event map[string]any, schema map[string]any) map[string]any {
 	properties, ok := schema["properties"]
 	if !ok {
-		properties = map[string]any{}
+		// no properties to iterate over
+		return map[string]any{}
 	}
 
 	filteredEvent := map[string]any{}
 
 	for key, value := range event {
-		propSchema := properties.(map[string]any)[key]
+		var propSchema any
+		if reflect.TypeOf(properties).Kind() == reflect.Map {
+			propSchema = properties.(map[string]any)[key]
+		}
 
-		if propSchema != nil {
-			propType := propSchema.(map[string]any)["type"]
+		if propSchema == nil {
+			// if propSchema is nil, it means the key doesn't exist in "properties"
+			// 	in the schema, so it's filtered out
+			continue
+		}
+		propType := propSchema.(map[string]any)["type"]
 
-			switch propType {
-			case "object":
-				filteredEvent[key] = filterEvent(
-					value.(map[string]any), propSchema.(map[string]any))
-			case "array":
-				// there are currently no array types in PBD, but here for completeness' sake
-				filteredArray := []any{}
+		switch propType {
+		case "object":
+			// The schema may contain object types with nested properties, so recursively
+			//   filter the nested data (value) with the nested schema (prop_schema).
+			//
+			//   I.e., "event_data" will have nested data that needs to be filtered
+			//       down to the properties in the schema:
+			//
+			//   properties:
+			//       ...
+			//       event_data:
+			//           type: object
+			//           properties:
+			//               playbook:
+			//                   ...
+			//               playbook_uuid:
+			//                   ...
+			//               host:
+			//                   ...
+			//               ...
+			//       ...
+			//
+			//   Specifically speaking, filtered_event["event_data"] will be set to
+			//       event["event_data"], with the inner keys filtered based on
+			//       the properties of the provided "event_data" object schema
+			//       -- filtered down to "playbook", "playbook_uuid", "host," etc.
+			filteredEvent[key] = filterEvent(
+				value.(map[string]any), propSchema.(map[string]any))
+		case "array":
+			// there are currently no array types in PBD, but here for completeness' sake
+			filteredArray := []any{}
 
-				if reflect.ValueOf(value).Kind() == reflect.Slice {
-					for _, item := range value.([]any) {
-						propSchemaItems := propSchema.(map[string]any)["items"]
-						propSchemaItemsType := propSchemaItems.(map[string]any)["type"]
+			if reflect.ValueOf(value).Kind() == reflect.Slice {
+				for _, item := range value.([]any) {
+					propSchemaItems := propSchema.(map[string]any)["items"]
+					propSchemaItemsType := propSchemaItems.(map[string]any)["type"]
 
-						if propSchemaItemsType == "object" {
-							filteredItem := filterEvent(
-								item.(map[string]any), propSchemaItems.(map[string]any))
-							filteredArray = append(filteredArray, filteredItem)
-						} else {
-							filteredArray = append(filteredArray, item)
-						}
+					if propSchemaItemsType == "object" {
+						filteredItem := filterEvent(
+							item.(map[string]any), propSchemaItems.(map[string]any))
+						filteredArray = append(filteredArray, filteredItem)
+					} else {
+						filteredArray = append(filteredArray, item)
 					}
-					filteredEvent[key] = filteredArray
 				}
-			default:
-				filteredEvent[key] = value
+				filteredEvent[key] = filteredArray
 			}
+		default:
+			filteredEvent[key] = value
 		}
 	}
 

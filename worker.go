@@ -355,6 +355,7 @@ func buildRequestBody(body string, filename string) (*bytes.Buffer, string, erro
 	return requestBody, outerContentType, nil
 }
 
+// getPlaybookDispatcherSchema loads the playbook dispatcher schema from file
 func getPlaybookDispatcherSchema() map[string]any {
 	// TODO: download the schema, fall back to default
 	var playbookDispatcherSchema map[string]any
