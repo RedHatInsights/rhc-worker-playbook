@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"git.sr.ht/~spc/go-log"
+	"github.com/goccy/go-yaml"
 	"github.com/google/uuid"
 	"github.com/redhatinsights/rhc-worker-playbook/internal/constants"
 	"github.com/redhatinsights/rhc-worker-playbook/internal/exec"
@@ -45,7 +46,11 @@ type Runner struct {
 }
 
 // NewRunner creates a new Runner, uniquely identified by ID.
-func NewRunner(ID string, timeout time.Duration, schema map[string]any) *Runner {
+func NewRunner(ID string, timeout time.Duration) *Runner {
+
+	schema := getPlaybookDispatcherSchema(filepath.Join(
+		constants.LibDir, "rhc-worker-playbook", "ansibleRunnerJobEvent.yaml"))
+
 	return &Runner{
 		Events:              make(chan json.RawMessage),
 		privateDataDir:      filepath.Join(constants.StateDir, "runs"),
@@ -285,22 +290,26 @@ func filterEvent(event map[string]any, schema map[string]any) map[string]any {
 				value.(map[string]any), propSchema.(map[string]any))
 		case "array":
 			// there are currently no array types in PBD, but here for completeness' sake
-			filteredArray := []any{}
 
 			if reflect.ValueOf(value).Kind() == reflect.Slice {
-				for _, item := range value.([]any) {
-					propSchemaItems := propSchema.(map[string]any)["items"]
-					propSchemaItemsType := propSchemaItems.(map[string]any)["type"]
+				itemType := reflect.TypeOf((value)).Elem().Kind()
 
-					if propSchemaItemsType == "object" {
-						filteredItem := filterEvent(
-							item.(map[string]any), propSchemaItems.(map[string]any))
-						filteredArray = append(filteredArray, filteredItem)
-					} else {
-						filteredArray = append(filteredArray, item)
+				// differentiate between maps and non-maps for type safety
+				if itemType == reflect.Map {
+					filteredArray := []map[string]any{}
+					for _, item := range value.([]map[string]any) {
+						filteredItem := filterArrayItem(item, propSchema)
+						filteredArray = append(filteredArray, filteredItem.(map[string]any))
 					}
+					filteredEvent[key] = filteredArray
+				} else {
+					filteredArray := []any{}
+					for _, item := range value.([]any) {
+						filteredItem := filterArrayItem(item, propSchema)
+						filteredArray = append(filteredArray, filteredItem)
+					}
+					filteredEvent[key] = filteredArray
 				}
-				filteredEvent[key] = filteredArray
 			}
 		default:
 			filteredEvent[key] = value
@@ -308,6 +317,21 @@ func filterEvent(event map[string]any, schema map[string]any) map[string]any {
 	}
 
 	return filteredEvent
+}
+
+// helper function for filterEvent to handle different item types
+func filterArrayItem(item any, propSchema any) any {
+	propSchemaItems := propSchema.(map[string]any)["items"]
+	propSchemaItemsType := propSchemaItems.(map[string]any)["type"]
+
+	if propSchemaItemsType == "object" {
+		filteredItem := filterEvent(
+			item.(map[string]any), propSchemaItems.(map[string]any))
+		return filteredItem
+	} else {
+		return item
+	}
+
 }
 
 // handleStatusFileEvent is the handler function invoked when the status file is
@@ -399,4 +423,22 @@ func prettyJson(jsonObject map[string]any) string {
 		return fmt.Sprintf("%v", jsonObject)
 	}
 	return string(pretty)
+}
+
+// getPlaybookDispatcherSchema loads the playbook dispatcher schema from file
+func getPlaybookDispatcherSchema(schemaFile string) map[string]any {
+	// TODO: download the schema, fall back to default
+	var playbookDispatcherSchema map[string]any
+
+	data, err := os.ReadFile(schemaFile)
+	if err != nil {
+		log.Errorf("cannot read file: file=%v error=%v", schemaFile, err)
+		return nil
+	}
+	if err = yaml.Unmarshal(data, &playbookDispatcherSchema); err != nil {
+		log.Errorf("cannot unmarshal API schema: %v", err)
+		return nil
+	}
+
+	return playbookDispatcherSchema
 }

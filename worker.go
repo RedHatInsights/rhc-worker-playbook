@@ -7,8 +7,6 @@ import (
 	"io"
 	"mime/multipart"
 	"net/textproto"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -18,7 +16,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/redhatinsights/rhc-worker-playbook/internal/ansible"
 	"github.com/redhatinsights/rhc-worker-playbook/internal/config"
-	"github.com/redhatinsights/rhc-worker-playbook/internal/constants"
 	"github.com/redhatinsights/rhc-worker-playbook/internal/exec"
 	"github.com/redhatinsights/yggdrasil/worker"
 )
@@ -106,10 +103,8 @@ func rx(
 	// Create the event manager.
 	eventManager := NewEventManager(id, returnURL, responseInterval, w)
 
-	schema := getPlaybookDispatcherSchema()
-
 	// Create the playbook runner.
-	runner := ansible.NewRunner(correlationID, 60*time.Second, schema)
+	runner := ansible.NewRunner(correlationID, 60*time.Second)
 
 	// Start the goroutine processing events from the runner.
 	go eventManager.processEvents(runner)
@@ -353,24 +348,4 @@ func buildRequestBody(body string, filename string) (*bytes.Buffer, string, erro
 	outerContentType := fmt.Sprintf("multipart/form-data; boundary=%s", writer.Boundary())
 
 	return requestBody, outerContentType, nil
-}
-
-// getPlaybookDispatcherSchema loads the playbook dispatcher schema from file
-func getPlaybookDispatcherSchema() map[string]any {
-	// TODO: download the schema, fall back to default
-	var playbookDispatcherSchema map[string]any
-
-	fallbackFile := filepath.Join(
-		constants.LibDir, "rhc-worker-playbook", "ansibleRunnerJobEvent.yaml")
-	data, err := os.ReadFile(fallbackFile)
-	if err != nil {
-		log.Errorf("cannot read file: file=%v error=%v", fallbackFile, err)
-		return nil
-	}
-	if err = yaml.Unmarshal(data, &playbookDispatcherSchema); err != nil {
-		log.Errorf("cannot unmarshal API schema: %v", err)
-		return nil
-	}
-
-	return playbookDispatcherSchema
 }
