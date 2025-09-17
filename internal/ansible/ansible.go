@@ -6,10 +6,12 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"time"
 
 	"git.sr.ht/~spc/go-log"
+	"github.com/goccy/go-yaml"
 	"github.com/google/uuid"
 	"github.com/redhatinsights/rhc-worker-playbook/internal/constants"
 	"github.com/redhatinsights/rhc-worker-playbook/internal/exec"
@@ -34,10 +36,21 @@ type Runner struct {
 	stopJobEventsWatch  chan struct{}
 	stopStatusFileWatch chan struct{}
 	timeout             time.Duration
+
+	// The job event schema provided by Playbook Dispatcher.
+	// We use this to filter job events down to just what is required
+	// 	by PD so we don't transmit excessive amounts of data.
+	// Though unlikely, this COULD change, so it's an untyped map.
+	// We will want to fetch this from the server so it's up to date.
+	schema map[string]any
 }
 
 // NewRunner creates a new Runner, uniquely identified by ID.
 func NewRunner(ID string, timeout time.Duration) *Runner {
+
+	schema := getPlaybookDispatcherSchema(filepath.Join(
+		constants.LibDir, "rhc-worker-playbook", "ansibleRunnerJobEvent.yaml"))
+
 	return &Runner{
 		Events:              make(chan json.RawMessage),
 		privateDataDir:      filepath.Join(constants.StateDir, "runs"),
@@ -45,6 +58,7 @@ func NewRunner(ID string, timeout time.Duration) *Runner {
 		stopJobEventsWatch:  make(chan struct{}),
 		stopStatusFileWatch: make(chan struct{}),
 		timeout:             timeout,
+		schema:              schema,
 	}
 }
 
@@ -177,6 +191,10 @@ func (r *Runner) handleJobEvent(event notify.EventInfo) {
 			log.Errorf("cannot unmarshal data: data=%v error=%v", data, err)
 			return
 		}
+
+		// log the full event
+		log.Debugf("received job event: %v", prettyJson(ansibleEvent))
+
 		eventData, ok := ansibleEvent["event_data"]
 		if !ok {
 			eventData = map[string]interface{}{}
@@ -202,15 +220,118 @@ func (r *Runner) handleJobEvent(event notify.EventInfo) {
 			ansibleEvent["end_line"] = 0
 		}
 
-		modifiedData, err := json.Marshal(ansibleEvent)
+		filteredEvent := filterEvent(ansibleEvent, r.schema)
+
+		modifiedData, err := json.Marshal(filteredEvent)
 		if err != nil {
 			log.Errorf("cannot marshal JSON: err=%v", err)
 			return
 		}
 
 		r.Events <- modifiedData
-		log.Debugf("event sent: event=%v", ansibleEvent)
+		log.Debugf("event sent: event=%v", prettyJson(filteredEvent))
 	}
+}
+
+// filterEvent filters an ansible job event `event` based on schema `schema`.
+//
+//	The function calls itself recursively to filter nested objects.
+//	All of this is loosely typed with map[string]any since we are dealing with
+//	job event JSON with nondeterministic properties.
+func filterEvent(event map[string]any, schema map[string]any) map[string]any {
+	properties, ok := schema["properties"]
+	if !ok {
+		// no properties to iterate over
+		return map[string]any{}
+	}
+
+	filteredEvent := map[string]any{}
+
+	for key, value := range event {
+		var propSchema any
+		if reflect.TypeOf(properties).Kind() == reflect.Map {
+			propSchema = properties.(map[string]any)[key]
+		}
+
+		if propSchema == nil {
+			// if propSchema is nil, it means the key doesn't exist in "properties"
+			// 	in the schema, so it's filtered out
+			continue
+		}
+		propType := propSchema.(map[string]any)["type"]
+
+		switch propType {
+		case "object":
+			// The schema may contain object types with nested properties, so recursively
+			//   filter the nested data (value) with the nested schema (prop_schema).
+			//
+			//   I.e., "event_data" will have nested data that needs to be filtered
+			//       down to the properties in the schema:
+			//
+			//   properties:
+			//       ...
+			//       event_data:
+			//           type: object
+			//           properties:
+			//               playbook:
+			//                   ...
+			//               playbook_uuid:
+			//                   ...
+			//               host:
+			//                   ...
+			//               ...
+			//       ...
+			//
+			//   Specifically speaking, filtered_event["event_data"] will be set to
+			//       event["event_data"], with the inner keys filtered based on
+			//       the properties of the provided "event_data" object schema
+			//       -- filtered down to "playbook", "playbook_uuid", "host," etc.
+			filteredEvent[key] = filterEvent(
+				value.(map[string]any), propSchema.(map[string]any))
+		case "array":
+			// there are currently no array types in PBD, but here for completeness' sake
+
+			if reflect.ValueOf(value).Kind() == reflect.Slice {
+				itemType := reflect.TypeOf((value)).Elem().Kind()
+
+				// differentiate between maps and non-maps for type safety
+				if itemType == reflect.Map {
+					filteredArray := []map[string]any{}
+					for _, item := range value.([]map[string]any) {
+						filteredItem := filterArrayItem(item, propSchema)
+						filteredArray = append(filteredArray, filteredItem.(map[string]any))
+					}
+					filteredEvent[key] = filteredArray
+				} else {
+					filteredArray := []any{}
+					for _, item := range value.([]any) {
+						filteredItem := filterArrayItem(item, propSchema)
+						filteredArray = append(filteredArray, filteredItem)
+					}
+					filteredEvent[key] = filteredArray
+				}
+			}
+		default:
+			filteredEvent[key] = value
+		}
+	}
+
+	return filteredEvent
+}
+
+// helper function for filterEvent to handle different item types
+func filterArrayItem(item any, propSchema any) any {
+	propSchemaItems := propSchema.(map[string]any)["items"]
+	propSchemaItemsType := propSchemaItems.(map[string]any)["type"]
+
+	if propSchemaItemsType == "object" {
+		filteredItem := filterEvent(
+			item.(map[string]any), propSchemaItems.(map[string]any))
+		return filteredItem
+	} else {
+		return item
+	}
+
 }
 
 // handleStatusFileEvent is the handler function invoked when the status file is
@@ -294,4 +415,30 @@ func (r *Runner) watch(
 			handler(event)
 		}
 	}
+}
+
+func prettyJson(jsonObject map[string]any) string {
+	pretty, err := json.MarshalIndent(jsonObject, "", "\t")
+	if err != nil {
+		return fmt.Sprintf("%v", jsonObject)
+	}
+	return string(pretty)
+}
+
+// getPlaybookDispatcherSchema loads the playbook dispatcher schema from file
+func getPlaybookDispatcherSchema(schemaFile string) map[string]any {
+	// TODO: download the schema, fall back to default
+	var playbookDispatcherSchema map[string]any
+
+	data, err := os.ReadFile(schemaFile)
+	if err != nil {
+		log.Errorf("cannot read file: file=%v error=%v", schemaFile, err)
+		return nil
+	}
+	if err = yaml.Unmarshal(data, &playbookDispatcherSchema); err != nil {
+		log.Errorf("cannot unmarshal API schema: %v", err)
+		return nil
+	}
+
+	return playbookDispatcherSchema
 }
