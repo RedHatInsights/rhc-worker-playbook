@@ -7,7 +7,11 @@ from datetime import datetime
 import paho.mqtt.client as mqtt
 
 
-def build_data_msg_for_worker_playbook(**data):
+def build_data_msg_for_worker_playbook(
+    response_interval=600,
+    content="http://localhost:8000/cq:qreate_file.yml",
+    **data
+):
     """
     Provides the mqtt data message in a format accepted by rhc-worker-playbook directive
     """
@@ -18,11 +22,11 @@ def build_data_msg_for_worker_playbook(**data):
         "sent": datetime.now().astimezone().replace(microsecond=0).isoformat(),
         "directive": "rhc_worker_playbook",
         "metadata": {
-            "response_interval": "600",
+            "response_interval": str(response_interval),
             "crc_dispatcher_correlation_id": str(uuid.uuid4()),
             "return_url": "http://localhost:8000/",
         },
-        "content": "http://localhost:8000/create_file.yml",
+        "content": content,
         **data,
     }
 
@@ -68,3 +72,28 @@ def verify_playbook_execution_status(crc_dispatcher_correlation_id, timeout=30):
                     return True
         time.sleep(5)
     return False
+
+# TODO: re-add once other PR is merged
+# def verify_uploaded_event_runner_data_is_filtered(req_body):
+#     """
+#     Check that the payload sent by rhc-worker-playbook is filtered down
+#     to only the required data.
+#     """
+#     json_lines = req_body.split('\n')
+#     for line in json_lines:
+#         if line == '':
+#             # request can end with newline and split results in empty string
+#             continue
+        
+#         parsed = json.loads(line)
+        
+#         # just use current known PBD schema to validate
+#         for prop in parsed:
+#             if prop not in ['event', 'uuid', 'counter', 'stdout', 'start_line', 'end_line', 'event_data']:
+#                 return False
+        
+#         for prop in parsed.get('event_data', {}):
+#             if prop not in ['playbook', 'playbook_uuid', 'host', 'crc_dispatcher_correlation_id', 'crc_dispatcher_error_code', 'crc_dispatcher_error_details']:
+#                 return False
+            
+#     return True

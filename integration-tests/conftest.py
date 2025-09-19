@@ -8,7 +8,40 @@ import distro
 import pytest
 import toml
 
+import concurrent.futures
+
+from http.server import HTTPServer, SimpleHTTPRequestHandler
+from requests_toolbelt.multipart import decoder
+
 logger = logging.getLogger(__name__)
+
+class FakeServer(HTTPServer):
+    post_body = None
+    # save the requests so we can reference them when the playbook finishes
+    # prior to the fix, rhc-worker-playbook on RHEL 10 would
+    #   upload endlessly because of a broken goroutine
+    request_bodies = []
+
+class FakeRequestHandler(SimpleHTTPRequestHandler):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, directory='./integration-tests', **kwargs)
+    
+    def do_GET(self):
+        super().do_GET()
+
+    def do_POST(self):
+        content_length = int(self.headers.get('Content-Length', 0))
+        content_type = self.headers.get('Content-Type')
+        body = self.rfile.read(content_length)
+
+        decoded_body = decoder.MultipartDecoder(body, content_type).parts[0].text
+
+        self.server.post_body = decoded_body
+        self.server.request_bodies.append(decoded_body)
+        logger.info(decoded_body)
+        self.send_response(201)
+        self.end_headers()
+        self.wfile.write(b"Accepted")
 
 
 @pytest.hookimpl(trylast=True)
@@ -22,23 +55,21 @@ def pytest_configure(config):
 
 
 @pytest.fixture
-def start_http_server_localhost():
+def http_server():
     """
     Run http server in current directory, it enables download of playbooks.
     """
-    command = ["python", "-m", "http.server", "8000"]
-    process = subprocess.Popen(
-        command,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        cwd="./integration-tests/",
-    )
     logger.info("Starting http server in 5s...")
     time.sleep(5)
+    server = FakeServer(("localhost", 8000), FakeRequestHandler)
+    executor = concurrent.futures.ThreadPoolExecutor()
+    executor.submit(server.serve_forever)
+    executor.shutdown(wait=False)
 
-    yield "http://localhost:8000"
-    process.terminate()
-    process.wait()
+    yield server
+    
+    server.shutdown()
+    server.server_close()
 
 
 @pytest.fixture

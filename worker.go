@@ -104,7 +104,7 @@ func rx(
 	eventManager := NewEventManager(id, returnURL, responseInterval, w)
 
 	// Create the playbook runner.
-	runner := ansible.NewRunner(correlationID, 60*time.Second)
+	runner := ansible.NewRunner(correlationID, 60*time.Minute)
 
 	// Start the goroutine processing events from the runner.
 	go eventManager.processEvents(runner)
