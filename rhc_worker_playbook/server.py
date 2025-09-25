@@ -6,7 +6,6 @@ from .constants import (
     ANSIBLE_COLLECTIONS_PATHS,
     RUNNER_ARTIFACTS_DIR,
     RUNNER_ROTATE_ARTIFACTS,
-    DEFAULT_JOB_EVENT_SCHEMA_FILE
 )
 
 sys.path.insert(0, WORKER_LIB_DIR)
@@ -25,10 +24,12 @@ from requests import Request
 from concurrent import futures
 from .protocol import yggdrasil_pb2_grpc, yggdrasil_pb2
 from .dispatcher_events import executor_on_start, executor_on_failed
+from .filter_event import filter_event
 
 # unbuffered stdout for logging to rhc
 sys.stdout = os.fdopen(sys.stdout.fileno(), "wb", buffering=0)
 atexit.register(sys.stdout.close)
+
 
 def _log(message):
     """
@@ -50,8 +51,6 @@ if not YGG_SOCKET_ADDR:
 YGG_SOCKET_ADDR = YGG_SOCKET_ADDR.replace("unix:@", "unix-abstract:")
 BASIC_PATH = "/sbin:/bin:/usr/sbin:/usr/bin"
 
-with open(DEFAULT_JOB_EVENT_SCHEMA_FILE) as schema_yaml:
-    DEFAULT_JOB_EVENT_SCHEMA = yaml.safe_load(schema_yaml)
 
 def _newlineDelimited(events):
     """
@@ -136,66 +135,8 @@ class Events(list):
     Extension of list to receive ansible-runner events
     """
 
-    def __init__(self, eventSchema=DEFAULT_JOB_EVENT_SCHEMA):
-        # event spec from playbook dispatcher for filtering events to reduce message size
-        self.eventSchema = eventSchema
-
-    # filter event data based on the playbook dispatcher job event schema
-    def _filter_event(self, event, schema):
-        properties = schema.get('properties', {})
-        filtered_event = {}
-
-        for key, value in event.items():
-            prop_schema = properties.get(key)
-            if not prop_schema:
-                continue
-
-            prop_type = prop_schema.get('type')
-
-            if prop_type == 'object':
-                
-                # The schema may contain object types with nested properties, so recursively
-                #   filter the nested data (value) with the nested schema (prop_schema).
-                #
-                #   I.e., "event_data" will have nested data that needs to be filtered
-                #       down to the properties in the schema:
-                #
-                #   properties:
-                #       ...
-                #       event_data:
-                #           type: object
-                #           properties:
-                #               playbook:
-                #                   ...
-                #               playbook_uuid:
-                #                   ...
-                #               host:
-                #                   ...
-                #               ...
-                #       ...
-                #
-                #   Specifically speaking, filtered_event["event_data"] will be set to
-                #       event["event_data"], with the inner keys filtered based on 
-                #       the properties of the provided "event_data" object schema
-                #       -- filtered down to "playbook", "playbook_uuid", "host," etc.
-                filtered_event[key] = self._filter_event(value, prop_schema)
-
-            elif prop_type == 'array':
-                # there are currently no array types in PBD, but here for completeness' sake
-                if isinstance(value, list):
-                    filtered_event[key] = [
-                        self._filter_event(item, prop_schema['items'])
-                        if prop_schema['items'].get('type') == 'object' else item
-                        for item in value
-                    ]
-                else:
-                    # type mismatch, ignore
-                    pass
-            else:
-                # basic type
-                filtered_event[key] = value
-
-        return filtered_event
+    def __init__(self):
+        pass
 
     def addEvent(self, event):
         try:
@@ -208,7 +149,8 @@ class Events(list):
         _log(str(event))
 
         # send the filtered event back to RHC
-        self.append(self._filter_event(event, self.eventSchema))
+        self.append(filter_event(event)
+)
         
         # this method must return True for ansible to save job events to disk
         #   at RUNNER_ARTIFACTS_DIR/{runId}/job_events
@@ -241,9 +183,7 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
         # load configuration
         config = _loadConfig()
 
-        # TODO: initialize this with the job event schema fetched from playbook dispatcher
         events = Events()
-
         # parse playbook from data field
         try:
             # required fields

@@ -2,7 +2,6 @@ import os
 
 WORKER_LIB_DIR = "@WORKER_LIB_DIR@"
 CONFIG_FILE = "@CONFIG_FILE@"
-DEFAULT_JOB_EVENT_SCHEMA_FILE = "@WORKER_LIB_DIR@/ansibleRunnerJobEvent.yml"
 ANSIBLE_COLLECTIONS_PATHS = (
     "/usr/share/rhc-worker-playbook/ansible/collections/ansible_collections/"
 )
