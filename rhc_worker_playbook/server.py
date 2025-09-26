@@ -108,7 +108,6 @@ def _loadConfig():
         "verify_playbook_version_check": _config.get(
             "verify_playbook_version_check", True
         ),
-        "insights_core_gpg_check": _config.get("insights_core_gpg_check", True),
     }
     return parsedConfig
 
@@ -190,22 +189,8 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
 
         if config["verify_playbook"]:
             _log("Verifying playbook...")
-            # --payload here will be a no-op because no upload is performed when using the verifier
-            #   but, it will allow us to update the egg!
-            args = [
-                "insights-client",
-                "-m",
-                "insights.client.apps.ansible.playbook_verifier",
-                "--quiet",
-                "--payload",
-                "noop",
-                "--content-type",
-                "noop",
-            ]
+            args = ["/usr/libexec/rhc-playbook-verifier", "--stdin"]
             env = {"PATH": self._basic_path}
-            if not config["insights_core_gpg_check"]:
-                args.append("--no-gpg")
-                env["BYPASS_GPG"] = "True"
             verifyProc = Popen(args, stdin=PIPE, stdout=PIPE, stderr=PIPE, env=env)
             stdout, stderr = verifyProc.communicate(input=playbook_str)
             if verifyProc.returncode != 0:
