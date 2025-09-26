@@ -17,15 +17,10 @@ func readFile(t *testing.T, file string) []byte {
 }
 
 func TestVerifyPlaybook(t *testing.T) {
-	if os.Getenv("USER") != "root" {
-		t.Skip("TestVerifyPlaybook requires insights-client; therefore it must run as root")
-	}
-
 	tests := []struct {
 		description string
 		input       struct {
 			playbook []byte
-			GPGCheck bool
 		}
 		want []byte
 	}{
@@ -33,10 +28,8 @@ func TestVerifyPlaybook(t *testing.T) {
 			description: "insights_remove.yml",
 			input: struct {
 				playbook []byte
-				GPGCheck bool
 			}{
 				playbook: readFile(t, "./testdata/insights_remove.yml"),
-				GPGCheck: true,
 			},
 			want: []byte(`- name: Insights Disable
   hosts: localhost
@@ -53,7 +46,7 @@ func TestVerifyPlaybook(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
 			log.SetLevel(log.LevelDebug)
-			got, err := verifyPlaybook(test.input.playbook, test.input.GPGCheck)
+			got, err := verifyPlaybook(test.input.playbook)
 			if err != nil {
 				t.Fatal(err)
 			}
