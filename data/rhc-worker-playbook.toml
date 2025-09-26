@@ -6,8 +6,5 @@ directive = "rhc_worker_playbook"
 # whether to verify incoming playboks
 verify-playbook = true
 
-# perform the insights-client GPG check on the insights-core egg
-insights-core-gpg-check = true
-
 # how verbose the output should be
 log-level = "debug"
