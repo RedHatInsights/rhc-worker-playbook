@@ -94,6 +94,7 @@ def yggdrasil_config_for_local_mqtt_broker():
     shutil.copyfile(config_path, backup_path)
 
     config = toml.load(config_path)
+    config["protocol"] = "mqtt"
     config["server"] = ["tcp://localhost:1883"]
     config["data-host"] = "localhost:8000"
     config["cert-file"] = ""
