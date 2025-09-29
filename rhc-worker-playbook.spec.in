@@ -16,6 +16,7 @@ Source2:    https://github.com/ansible-collections/ansible.posix/archive/%{ansib
 Requires: insights-client
 Requires: python3dist(requests)
 Requires: python3dist(pyyaml)
+Requires: python3dist(jsonschema)
 Requires: ansible-core
 BuildRequires: pkgconfig
 BuildRequires: python3-devel
