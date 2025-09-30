@@ -51,10 +51,10 @@ clean:
 	rm rhc-worker-playbook.spec
 
 .PHONY: tarball
-tarball: dist/$(PKGNAME)-$(PKGVER).tar.gz
+tarball: $(PKGNAME)-$(PKGVER).tar.gz
 
-dist/$(PKGNAME)-$(PKGVER).tar.gz:
-	$(PYTHON) setup.py sdist
+$(PKGNAME)-$(PKGVER).tar.gz:
+	$(PYTHON) setup.py sdist --dist-dir .
 
 .PHONY: rhc-worker-playbook.spec
 rhc-worker-playbook.spec: rhc-worker-playbook.spec.in
