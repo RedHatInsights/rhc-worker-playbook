@@ -24,6 +24,7 @@ from requests import Request
 from concurrent import futures
 from .protocol import yggdrasil_pb2_grpc, yggdrasil_pb2
 from .dispatcher_events import executor_on_start, executor_on_failed
+from .filter_event import filter_event
 
 # unbuffered stdout for logging to rhc
 sys.stdout = os.fdopen(sys.stdout.fileno(), "wb", buffering=0)
@@ -143,7 +144,18 @@ class Events(list):
         except AttributeError:
             # one of the fields was null/empty
             pass
-        self.append(event)
+
+        # log the full event
+        _log(str(event))
+
+        # send the filtered event back to RHC
+        self.append(filter_event(event)
+)
+        
+        # this method must return True for ansible to save job events to disk
+        #   at RUNNER_ARTIFACTS_DIR/{runId}/job_events
+        return True
+
 
 
 class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
