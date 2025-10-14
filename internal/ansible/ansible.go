@@ -222,18 +222,7 @@ func (r *Runner) handleJobEvent(event notify.EventInfo) {
 			return
 		}
 
-		// filter the event by narrowing to the playbook-dispatcher types
-		var filteredEvent PlaybookRunResponseMessageYamlEventsElem
-		if err := json.Unmarshal(modifiedData, &filteredEvent); err != nil {
-			log.Errorf("cannot unmarshal JSON: err=%v", err)
-			return
-		}
-
-		filteredModifiedData, err := json.Marshal(filteredEvent)
-		if err != nil {
-			log.Errorf("cannot marshal JSON: err=%v", err)
-			return
-		}
+		filteredModifiedData := filterJobEvent(modifiedData)
 
 		r.Events <- filteredModifiedData
 		log.Debugf("event sent: event=%v", prettyJson(filteredModifiedData))
@@ -330,6 +319,29 @@ func (r *Runner) watch(
 	}
 }
 
+// filter the ansible job event based on a built-in schema of known necessary data
+func filterJobEvent(jobEventData []byte) []byte {
+	// filter the event by narrowing to the playbook-dispatcher types
+	var filteredEvent PlaybookRunResponseMessageEventsElem
+	if err := json.Unmarshal(jobEventData, &filteredEvent); err != nil {
+		// problem filtering, return original event
+		log.Errorf("error filtering job event: err=%v", err)
+		log.Info("sending unfiltered job event...")
+		return jobEventData
+	}
+
+	filteredData, err := json.Marshal(filteredEvent)
+	if err != nil {
+		// problem filtering, return original event
+		log.Errorf("error filtering job event: err=%v", err)
+		log.Info("sending unfiltered job event...")
+		return jobEventData
+	}
+
+	return filteredData
+}
+
+// pretty-print a given JSON byte array
 func prettyJson(jsonBytes []byte) string {
 	var jsonObject map[string]any
 	if err := json.Unmarshal(jsonBytes, &jsonObject); err != nil {
