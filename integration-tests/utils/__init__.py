@@ -99,4 +99,3 @@ def verify_uploaded_event_runner_data_is_filtered(req_body):
                 return False
 
     return True
-            
