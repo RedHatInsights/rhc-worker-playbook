@@ -37,6 +37,7 @@ Python-based worker for Red Hat connect, used to launch Ansible playbooks via An
 %prep
 %setup -q -a1 -a2 -n %{name}-%{version}
 
+
 pushd community.general-%{community_general_version}
 rm -vr .github .azure-pipelines
 rm -rvf tests/ hacking/
