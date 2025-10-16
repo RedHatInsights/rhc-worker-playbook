@@ -134,3 +134,4 @@ export %gomodulesmode
 %{_datadir}/%{name}
 %{_libdir}/%{name}
 %dir %attr(700, root, yggdrasil-worker) %{_localstatedir}/lib/%{name}
+
