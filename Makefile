@@ -1,4 +1,4 @@
-PYTHON		?= python3
+PYTHON		?= python3.9
 
 PKGNAME=rhc-worker-playbook
 PKGVER = $(shell $(PYTHON) setup.py --version | tr -d '\n')
@@ -52,13 +52,13 @@ clean:
 
 .PHONY: tarball
 tarball:
-	$(PYTHON) setup.py sdist --keep-temp
+	$(PYTHON) setup.py sdist
 # 	what the heck are we doing here
-	rm -f dist/rhc_worker_playbook-$(PKGVER).tar.gz
-	mv rhc_worker_playbook-$(PKGVER) $(PKGNAME)-$(PKGVER)
-	tar czf $(PKGNAME)-$(PKGVER).tar.gz $(PKGNAME)-$(PKGVER)
-	mv $(PKGNAME)-$(PKGVER).tar.gz dist/$(PKGNAME)-$(PKGVER).tar.gz
-	rm -rf $(PKGNAME)-$(PKGVER)
+# 	rm -f dist/rhc_worker_playbook-$(PKGVER).tar.gz
+# 	mv rhc_worker_playbook-$(PKGVER) $(PKGNAME)-$(PKGVER)
+# 	tar czf $(PKGNAME)-$(PKGVER).tar.gz $(PKGNAME)-$(PKGVER)
+# 	mv $(PKGNAME)-$(PKGVER).tar.gz dist/$(PKGNAME)-$(PKGVER).tar.gz
+# 	rm -rf $(PKGNAME)-$(PKGVER)
 
 .PHONY: rhc-worker-playbook.spec
 rhc-worker-playbook.spec: rhc-worker-playbook.spec.in

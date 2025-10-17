@@ -3,6 +3,7 @@ downstream_package_name: rhc-worker-playbook
 specfile_path: rhc-worker-playbook.spec
 
 srpm_build_deps:
+  - python3
   - make
   - python3dist(cython)
   - python3dist(pip)
@@ -11,6 +12,9 @@ srpm_build_deps:
 
 actions:
   post-upstream-clone:
+    # - python3.9 -m venv venv
+    # - source venv/bin/activate
+    # - rpm -qa "python3*"
     - make rhc-worker-playbook.spec
   get-current-version:
     - awk '/^Version:/ {print $2;}' rhc-worker-playbook.spec
@@ -26,9 +30,9 @@ jobs:
     additional_repos:
       - "copr://@yggdrasil/latest"
     targets:
-      - centos-stream-9-aarch64
-      - centos-stream-9-x86_64
-      - rhel-9-aarch64
+      # - centos-stream-9-aarch64
+      # - centos-stream-9-x86_64
+      # - rhel-9-aarch64
       - rhel-9-x86_64
 
   - job: copr_build
@@ -37,9 +41,9 @@ jobs:
     owner: "@yggdrasil"
     project: latest
     targets:
-      - centos-stream-9-aarch64
-      - centos-stream-9-x86_64
-      - rhel-9-aarch64
+      # - centos-stream-9-aarch64
+      # - centos-stream-9-x86_64
+      # - rhel-9-aarch64
       - rhel-9-x86_64
 
   - job: tests
