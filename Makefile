@@ -1,6 +1,7 @@
 PYTHON		?= python3
 
 PKGNAME=rhc-worker-playbook
+PYPKGNAME=rhc_worker_playbook
 PKGVER = $(shell $(PYTHON) setup.py --version | tr -d '\n')
 _SHORT_COMMIT = $(shell git rev-parse --short HEAD | tr -d '\n')
 _LATEST_TAG = $(shell git describe --tags --abbrev=0 --always | tr -d '\n')
@@ -41,7 +42,7 @@ install:
 .PHONY: uninstall
 uninstall:
 	rm -rf $(LIBEXECDIR)/rhc/$(PKGNAME).worker
-	rm -rf $(LIBDIR)/python*/site-packages/$(PKGNAME)*
+	rm -rf $(LIBDIR)/python*/site-packages/$(PYPKGNAME)*
 	rm -rf $(LIBDIR)/$(PKGNAME)
 
 .PHONY: clean
@@ -51,10 +52,14 @@ clean:
 	rm rhc-worker-playbook.spec
 
 .PHONY: tarball
-tarball: dist/$(PKGNAME)-$(PKGVER).tar.gz
-
-dist/$(PKGNAME)-$(PKGVER).tar.gz:
+tarball:
 	$(PYTHON) setup.py sdist
+# 	what the heck are we doing here
+# 	rm -f dist/rhc_worker_playbook-$(PKGVER).tar.gz
+# 	mv rhc_worker_playbook-$(PKGVER) $(PKGNAME)-$(PKGVER)
+# 	tar czf $(PKGNAME)-$(PKGVER).tar.gz $(PKGNAME)-$(PKGVER)
+# 	mv $(PKGNAME)-$(PKGVER).tar.gz dist/$(PKGNAME)-$(PKGVER).tar.gz
+# 	rm -rf $(PKGNAME)-$(PKGVER)
 
 .PHONY: rhc-worker-playbook.spec
 rhc-worker-playbook.spec: rhc-worker-playbook.spec.in
