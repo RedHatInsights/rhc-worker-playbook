@@ -1,6 +1,7 @@
-PYTHON		?= python3.9
+PYTHON		?= python3
 
 PKGNAME=rhc-worker-playbook
+PYPKGNAME=rhc_worker_playbook
 PKGVER = $(shell $(PYTHON) setup.py --version | tr -d '\n')
 _SHORT_COMMIT = $(shell git rev-parse --short HEAD | tr -d '\n')
 _LATEST_TAG = $(shell git describe --tags --abbrev=0 --always | tr -d '\n')
@@ -41,7 +42,7 @@ install:
 .PHONY: uninstall
 uninstall:
 	rm -rf $(LIBEXECDIR)/rhc/$(PKGNAME).worker
-	rm -rf $(LIBDIR)/python*/site-packages/$(PKGNAME)*
+	rm -rf $(LIBDIR)/python*/site-packages/$(PYPKGNAME)*
 	rm -rf $(LIBDIR)/$(PKGNAME)
 
 .PHONY: clean

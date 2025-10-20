@@ -20,7 +20,7 @@ actions:
     - awk '/^Version:/ {print $2;}' rhc-worker-playbook.spec
   create-archive:
     - make tarball
-    - bash -c 'echo dist/rhc-worker-playbook-*.tar.*'
+    - bash -c 'echo dist/rhc_worker_playbook-*.tar.*'
   fix-spec-file:
     - bash -c 'echo "No action needed"'
 
