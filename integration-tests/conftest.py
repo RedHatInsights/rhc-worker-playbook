@@ -144,12 +144,13 @@ def yggdrasil_config_for_local_mqtt_broker():
     os.remove(backup_path)
 
 
-def clear_yggdrasil_journal_logs():
+def clear_journal_logs():
+    """Clear journal logs for both services before test execution"""
     try:
         subprocess.run(["journalctl", "--rotate"], check=True)
         subprocess.run(["journalctl", "--vacuum-time=1s"], check=True)
     except subprocess.CalledProcessError as e:
-        print(f"Error cleaning yggdrasil logs : {e}")
+        print(f"Error cleaning journal logs : {e}")
 
 
 def log_journalctl_yggdrasil_logs():
@@ -163,18 +164,42 @@ def log_journalctl_yggdrasil_logs():
         print(f"failed to fetch yggdrasil logs : {e}")
 
 
+def log_journalctl_rhc_worker_logs():
+    """Print rhc-worker-playbook logs"""
+    try:
+        logs = subprocess.check_output(
+            ["journalctl", "-u", "com.redhat.Yggdrasil1.Worker1.rhc_worker_playbook", "--no-pager"], text=True
+        )
+        logger.info(logs)
+    except subprocess.CalledProcessError as e:
+        print(f"failed to fetch rhc-worker-playbook logs : {e}")
+
+
+def log_all_service_logs():
+    """Print logs for both yggdrasil and rhc-worker-playbook services"""
+    print("=" * 80)
+    print("YGGDRASIL SERVICE LOGS:")
+    print("=" * 80)
+    log_journalctl_yggdrasil_logs()
+    
+    print("=" * 80)
+    print("RHC-WORKER-PLAYBOOK SERVICE LOGS:")
+    print("=" * 80)
+    log_journalctl_rhc_worker_logs()
+
+
 @pytest.hookimpl(tryfirst=True)
 def pytest_runtest_makereport(item, call):
-    """Hook to print yggdrasil logs if test fails"""
+    """Hook to print service logs if test fails"""
     if call.when == "call" and call.excinfo is not None:
         print(
-            f"Test '{item.name}' Failed. Journalctl for yggdrasil during test is below. "
+            f"Test '{item.name}' Failed. Service logs during test are below."
         )
-        log_journalctl_yggdrasil_logs()
+        log_all_service_logs()
 
 
 @pytest.fixture(autouse=True)
 def manage_journal_logs():
     """Fixture to rotate journal logs before each test"""
-    clear_yggdrasil_journal_logs()
+    clear_journal_logs()
     yield
