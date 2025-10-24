@@ -3,6 +3,7 @@ downstream_package_name: rhc-worker-playbook
 specfile_path: rhc-worker-playbook.spec
 
 srpm_build_deps:
+  - python3.9
   - make
   - python3dist(cython)
   - python3dist(pip)
