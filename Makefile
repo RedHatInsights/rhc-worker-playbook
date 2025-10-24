@@ -19,7 +19,6 @@ PYTHON_PKGDIR ?= $(shell /usr/libexec/platform-python -Ic "from distutils.syscon
 .PHONY: build
 build: rhc_worker_playbook/constants.py scripts/rhc-worker-playbook.worker
 	$(PYTHON) setup.py build
-	$(PYTHON) -m pip wheel --wheel-dir=vendor --no-index --find-links vendor vendor/*.tar.gz
 
 rhc_worker_playbook/constants.py: rhc_worker_playbook/constants.py.in
 	sed \
@@ -33,9 +32,9 @@ scripts/rhc-worker-playbook.worker: scripts/rhc-worker-playbook.worker.in
 		$^ > $@
 
 .PHONY: install
-install: 
+install: build
 	$(PYTHON) setup.py install --root=$(DESTDIR) --prefix=$(PREFIX) --install-scripts=$(LIBEXECDIR)/rhc --single-version-externally-managed --record /dev/null
-	$(PYTHON) -m pip install --target $(DESTDIR)$(LIBDIR)/$(PKGNAME) --no-index --find-links vendor vendor/*.whl
+	$(PYTHON) -m pip install . --target $(DESTDIR)$(LIBDIR)/$(PKGNAME)
 	[[ -e $(DESTDIR)$(CONFIG_FILE) ]] || install -D -m644 ./rhc-worker-playbook.toml $(DESTDIR)$(CONFIG_FILE)
 
 .PHONY: uninstall
