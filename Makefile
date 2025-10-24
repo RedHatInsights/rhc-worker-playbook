@@ -1,4 +1,4 @@
-PYTHON		?= python3
+PYTHON		?= python3.9
 
 PKGNAME=rhc-worker-playbook
 PKGVER = $(shell $(PYTHON) setup.py --version | tr -d '\n')
