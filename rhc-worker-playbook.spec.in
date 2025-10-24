@@ -20,14 +20,7 @@ Requires: ansible-core
 BuildRequires: pkgconfig
 BuildRequires: python3-devel
 BuildRequires: python3dist(pip)
-BuildRequires: python3dist(wheel)
 BuildRequires: python3dist(setuptools)
-BuildRequires: openssl-devel
-BuildRequires: c-ares-devel
-BuildRequires: zlib-devel
-BuildRequires: python3dist(cython)
-BuildRequires: gcc
-BuildRequires: gcc-c++
 
 ExcludeArch:   i686
 

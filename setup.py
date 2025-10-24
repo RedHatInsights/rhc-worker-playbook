@@ -13,5 +13,12 @@ setuptools.setup(
     scripts=[
         "scripts/rhc-worker-playbook.worker"
     ],
+    install_requires = [
+        "ansible-runner",
+        "grpcio==1.53.0",
+        "grpcio-tools==1.53.0",
+        "protobuf==4.21.6",
+        "toml"
+    ],
     zip_safe=False,
 )
