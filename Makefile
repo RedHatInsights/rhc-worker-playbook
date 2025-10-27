@@ -50,7 +50,6 @@ tarball: dist/$(PKGNAME)-$(PKGVER).tar.gz
 dist/$(PKGNAME)-$(PKGVER).tar.gz:
 	$(PYTHON) setup.py sdist
 
-.PHONY: rhc-worker-playbook.spec
 rhc-worker-playbook.spec: rhc-worker-playbook.spec.in
 	sed \
 		-e 's,[@]PKGVER[@],$(PKGVER),g' \
