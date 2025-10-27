@@ -17,7 +17,7 @@ WORKER_LIB_DIR ?= $(LIBDIR)/$(PKGNAME)
 PYTHON_PKGDIR ?= $(shell /usr/libexec/platform-python -Ic "from distutils.sysconfig import get_python_lib; print(get_python_lib())")
 
 .PHONY: build
-build: rhc_worker_playbook/constants.py scripts/rhc-worker-playbook.worker
+build: rhc_worker_playbook/constants.py
 	$(PYTHON) setup.py build
 	$(PYTHON) -m pip wheel --wheel-dir=vendor --no-index --find-links vendor vendor/*.tar.gz
 
@@ -25,11 +25,6 @@ rhc_worker_playbook/constants.py: rhc_worker_playbook/constants.py.in
 	sed \
 		-e 's,[@]CONFIG_FILE[@],$(CONFIG_FILE),g' \
 		-e 's,[@]WORKER_LIB_DIR[@],$(WORKER_LIB_DIR),g' \
-		$^ > $@
-
-scripts/rhc-worker-playbook.worker: scripts/rhc-worker-playbook.worker.in
-	sed \
-		-e 's,[@]PYTHON_PKGDIR[@],$(PYTHON_PKGDIR),g' \
 		$^ > $@
 
 .PHONY: install
@@ -47,7 +42,6 @@ uninstall:
 .PHONY: clean
 clean:
 	rm rhc_worker_playbook/constants.py
-	rm scripts/rhc-worker-playbook.worker
 	rm rhc-worker-playbook.spec
 
 .PHONY: tarball

@@ -10,8 +10,10 @@ setuptools.setup(
     url="https://github.com/RedHatInsights/rhc-ansible-worker",
     packages=setuptools.find_packages(),
     python_requires='>=3.6',
-    scripts=[
-        "scripts/rhc-worker-playbook.worker"
-    ],
+    entry_points={
+        "console_scripts": [
+            "rhc-worker-playbook.worker = rhc_worker_playbook.server:serve"
+        ]
+    },
     zip_safe=False,
 )
