@@ -13,7 +13,7 @@ srpm_build_deps:
   - go-rpm-macros
   - golang
   - jq
-  - meson
+  - meson-1.7.2
   - rpm-build
 
 actions:
