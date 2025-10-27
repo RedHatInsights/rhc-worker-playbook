@@ -15,6 +15,7 @@ setuptools.setup(
             "rhc-worker-playbook.worker = rhc_worker_playbook.server:serve"
         ]
     },
+    setup_requires=["wheel"],
     install_requires=[
         "ansible-runner==2.1.1",
         "grpcio<1.56",  # required by protobuf<=3.20
