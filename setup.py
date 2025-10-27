@@ -15,5 +15,14 @@ setuptools.setup(
             "rhc-worker-playbook.worker = rhc_worker_playbook.server:serve"
         ]
     },
+    install_requires=[
+        "ansible-runner==2.1.1",
+        "grpcio<1.56",  # required by protobuf<=3.20
+        "grpcio-tools<1.49",  # required by protobuf<=3.20
+        "protobuf<=3.20",  # required by rhc_worker_playbook/protocol/*
+        "requests",
+        "setuptools<81",  # deps need pkg_resources at runtime
+        "toml",
+    ],
     zip_safe=False,
 )
