@@ -16,10 +16,15 @@ CONFIG_FILE	?= $(CONFIG_DIR)/rhc-worker-playbook.toml
 WORKER_LIB_DIR ?= $(LIBDIR)/$(PKGNAME)
 PYTHON_PKGDIR ?= $(shell /usr/libexec/platform-python -Ic "from distutils.sysconfig import get_python_lib; print(get_python_lib())")
 
-.PHONY: build
-build: rhc_worker_playbook/constants.py
-	$(PYTHON) setup.py build
-	$(PYTHON) -m pip wheel --wheel-dir=vendor --no-index --find-links vendor vendor/*.tar.gz
+SOURCES := $(shell git ls-files '*.py' rhc-worker-playbook.toml)
+
+dist: rhc_worker_playbook/constants.py $(SOURCES)
+	$(PYTHON) setup.py sdist
+	touch $@  # ensure target is newer than prerequisites
+
+wheels: rhc_worker_playbook/constants.py $(SOURCES)
+	$(PYTHON) -m pip wheel --wheel-dir=wheels .
+	touch $@  # ensure target is newer than prerequisites
 
 rhc_worker_playbook/constants.py: rhc_worker_playbook/constants.py.in
 	sed \
@@ -43,12 +48,6 @@ uninstall:
 clean:
 	rm rhc_worker_playbook/constants.py
 	rm rhc-worker-playbook.spec
-
-.PHONY: tarball
-tarball: dist/$(PKGNAME)-$(PKGVER).tar.gz
-
-dist/$(PKGNAME)-$(PKGVER).tar.gz:
-	$(PYTHON) setup.py sdist
 
 rhc-worker-playbook.spec: rhc-worker-playbook.spec.in
 	sed \
