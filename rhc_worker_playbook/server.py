@@ -1,6 +1,14 @@
-import sys
+import asyncio
+import functools
+import json
 import os
-from .constants import (
+import sys
+import time
+import uuid
+from concurrent import futures
+from subprocess import Popen, PIPE
+
+from rhc_worker_playbook.constants import (
     WORKER_LIB_DIR,
     CONFIG_FILE,
     ANSIBLE_COLLECTIONS_PATHS,
@@ -8,21 +16,16 @@ from .constants import (
     RUNNER_ROTATE_ARTIFACTS,
 )
 
+# Make vendored dependencies available.
 sys.path.insert(0, WORKER_LIB_DIR)
+
+import ansible_runner
+import grpc
 import toml
 import yaml
-import grpc
-import ansible_runner
-import time
-import json
-import uuid
-import asyncio
-import functools
-from subprocess import Popen, PIPE
 from requests import Request
-from concurrent import futures
-from .protocol import yggdrasil_pb2_grpc, yggdrasil_pb2
-from .dispatcher_events import executor_on_start, executor_on_failed
+from rhc_worker_playbook.dispatcher_events import executor_on_start, executor_on_failed
+from rhc_worker_playbook.protocol import yggdrasil_pb2_grpc, yggdrasil_pb2
 
 
 def _log(message: str) -> None:
