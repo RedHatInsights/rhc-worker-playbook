@@ -18,23 +18,36 @@ $ go install git.sr.ht/~spc/mqttcli/cmd/...
 
 *HTTP server*: An optional HTTP server used to request payloads from localhost. This does not need to be more complicated than using the Python's `SimpleHTTPServer` module.
 
-# Install rhc-worker-playbook develop setup
+# Installation
 
-`rhc-worker-playbook` needs some devel packages in order to compile the C extensions, which may take some time to run as it dowloads and install everything needed to the `rhc-worker-playbook`.
+To install for development:
 
-```console
-$ sudo dnf install c-ares-devel openssl-devel python3-devel gcc gcc-c++
-$ python -m venv .venv
-$ source .venv/bin/activate
-$ make build
+```bash
+# RHEL 8 package names; change "39" to "3" on RHEL 9
+dnf install python39 python39-devel python39-setuptools make ansible-core
+CONFIG_DIR=$(realpath .) make rhc_worker_playbook/constants.py
+
+python3.9 -m venv .venv
+source .venv/bin/activate
+pip install --editable .
+
+# Connect to rhcd.service
+ss | grep yggd-dispatcher
+YGG_SOCKET_ADDR=unix:@yggd-dispatcher-... $(which rhc-worker-playbook.worker)
 ```
 
-Additionally it can be used through `rhc` installing the `rhc-worker-playbook` as a worker.
+To install system-wide (**dangerous!**):
 
-```console
-$ sudo make CONFIG_DIR=$(pkg-config rhc --variable workerconfdir) installed-lib-dir
-$ sudo make build
-$ sudo make install CONFIG_DIR=$(pkg-config rhc --variable workerconfdir)
+```bash
+# RHEL 8 package names; change "39" to "3" on RHEL 9
+dnf install python39 python39-devel python39-setuptools make ansible-core
+make wheels
+
+# preview install tree
+DESTDIR=fakeroot make install
+
+# install; rhcd.service automatically starts worker
+sudo make install
 ```
 
 # Test environment Quickstart
@@ -109,27 +122,16 @@ Alternatively, `yggdrasil` has a variable in its config file to determine the `c
 
 # How to contribute
 
- ## Running tests
+To lint changes:
 
-Any proposed code change in `rhc-worker-playbook` is automatically rejected by
-"GitHub Actions" if the change causes test failures.
-
-It is recommended for developers to run the test suite before submitting patch
-for review. This allows to catch errors as early as possible.
-
-### Preferred way to run the tests
-
-The preferred way to run the linter tests is using `flake8`.
-
-``` shell
-$ python3 -m pip install flake8
-$ flake8 rhc_worker_playbook/*.py
+```bash
+pip install pre-commit
+pre-commit run
 ```
 
-## Code Guidelines
-- Commits follow the [Conventional Commits](https://www.conventionalcommits.org/) pattern.
-- Commit messages should include a concise subject line that completes the following phrase: "when applied, this commit will...". The body of the commit should further expand on this statement with additional relevant details.
-- Files should be formatted using `black` before committing changes. Again, the
-  GitHub Action tests will fail if a file is not properly formatted.
-- A release branch, `release-0.1` exists for maintaining the 0.1.x branch. This
-  branch is intended to maintain RHEL8 compatibility.
+Additionally:
+
+- Commit messages should include a concise subject line that completes the following phrase: "when
+  applied, this commit will...". The body of the commit should further expand on this statement with
+  additional relevant details.
+- The `release-0.1` branch provides a Python implementation, for RHEL 8 and RHEL 9.
