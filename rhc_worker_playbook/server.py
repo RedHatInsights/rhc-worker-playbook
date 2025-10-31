@@ -38,19 +38,6 @@ def _log(message):
     sys.stdout.write((message + "\n").encode())
 
 
-# for some reason, without a short delay, RHC connects too quickly
-#   and cloud connector service can't see it
-time.sleep(5)
-
-YGG_SOCKET_ADDR = os.environ.get("YGG_SOCKET_ADDR")
-if not YGG_SOCKET_ADDR:
-    _log("Missing YGG_SOCKET_ADDR environment variable")
-    sys.exit(1)
-# massage the value for python grpc
-YGG_SOCKET_ADDR = YGG_SOCKET_ADDR.replace("unix:@", "unix-abstract:")
-BASIC_PATH = "/sbin:/bin:/usr/sbin:/usr/bin"
-
-
 def _newlineDelimited(events):
     """
     Dump a list into a newline-delimited JSON format
@@ -154,6 +141,7 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
             _log("No dispatcher parameter was provided to the WorkerService")
             raise Exception
         self.dispatcher = dispatcher
+        self._basic_path = "/sbin:/bin:/usr/sbin:/usr/bin"
 
     def Send(self, request, context):
         """
@@ -217,7 +205,7 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
                 "--content-type",
                 "noop",
             ]
-            env = {"PATH": BASIC_PATH}
+            env = {"PATH": self._basic_path}
             if not config["insights_core_gpg_check"]:
                 args.append("--no-gpg")
                 env["BYPASS_GPG"] = "True"
@@ -275,7 +263,7 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
             envvars={
                 "PYTHONPATH": WORKER_LIB_DIR,
                 "PYTHONDONTWRITEBYTECODE": "1",
-                "PATH": BASIC_PATH,
+                "PATH": self._basic_path,
                 "ANSIBLE_COLLECTIONS_PATHS": ANSIBLE_COLLECTIONS_PATHS,
             },
             event_handler=events.addEvent,
@@ -323,9 +311,13 @@ def serve():
     # load config to get directive
     config = _loadConfig()
 
+    # for some reason, without a short delay, RHC connects too quickly and cloud
+    # cloud connector service can't see it
+    time.sleep(5)
+
     # open the channel to ygg Dispatcher
     channel = grpc.insecure_channel(
-        YGG_SOCKET_ADDR,
+        _get_ygg_socket_addr(),
         options=[("grpc.enable_http_proxy", 0)],
     )
     dispatcher = yggdrasil_pb2_grpc.DispatcherStub(channel)
@@ -356,6 +348,15 @@ def serve():
     # off to the races
     server.start()
     server.wait_for_termination()
+
+
+def _get_ygg_socket_addr() -> str:
+    ygg_socket_addr = os.environ.get("YGG_SOCKET_ADDR")
+    if not ygg_socket_addr:
+        _log("Missing YGG_SOCKET_ADDR environment variable")
+        sys.exit(1)
+    # massage the value for python grpc
+    return ygg_socket_addr.replace("unix:@", "unix-abstract:")
 
 
 if __name__ == "__main__":
