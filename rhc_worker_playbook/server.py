@@ -16,7 +16,6 @@ import ansible_runner
 import time
 import json
 import uuid
-import atexit
 import asyncio
 import functools
 from subprocess import Popen, PIPE
@@ -25,17 +24,12 @@ from concurrent import futures
 from .protocol import yggdrasil_pb2_grpc, yggdrasil_pb2
 from .dispatcher_events import executor_on_start, executor_on_failed
 
-# unbuffered stdout for logging to rhc
-sys.stdout = os.fdopen(sys.stdout.fileno(), "wb", buffering=0)
-atexit.register(sys.stdout.close)
 
-
-def _log(message):
+def _log(message: str) -> None:
     """
-    Send message as bytes over unbuffered stdout for
-    RHC to log
+    Send message over unbuffered stdout for RHC to log
     """
-    sys.stdout.write((message + "\n").encode())
+    print(message + "\n", flush=True)
 
 
 def _newlineDelimited(events):
