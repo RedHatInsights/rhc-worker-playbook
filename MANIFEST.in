@@ -1,5 +1,3 @@
 include Makefile
-include vendor/*
 include rhc-worker-playbook.toml
 include rhc_worker_playbook/constants.py.in
-include scripts/rhc-worker-playbook.worker.in

@@ -9,9 +9,21 @@ setuptools.setup(
     long_description="Listens on gRPC messages and launches Ansible with received playbooks",
     url="https://github.com/RedHatInsights/rhc-ansible-worker",
     packages=setuptools.find_packages(),
-    python_requires='>=3.6',
-    scripts=[
-        "scripts/rhc-worker-playbook.worker"
+    python_requires=">=3.9",
+    entry_points={
+        "console_scripts": [
+            "rhc-worker-playbook.worker = rhc_worker_playbook.server:serve"
+        ]
+    },
+    setup_requires=["wheel"],
+    install_requires=[
+        "ansible-runner==2.1.1",
+        "grpcio<1.56",  # required by protobuf<=3.20
+        "grpcio-tools<1.49",  # required by protobuf<=3.20
+        "protobuf<=3.20",  # required by rhc_worker_playbook/protocol/*
+        "requests",
+        "setuptools<81",  # deps need pkg_resources at runtime
+        "toml",
     ],
     zip_safe=False,
 )

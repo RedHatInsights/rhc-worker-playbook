@@ -1,0 +1,30 @@
+default_language_version:
+  python: python3.9
+
+exclude: ^rhc_worker_playbook/protocol/
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: debug-statements
+  - repo: https://github.com/psf/black.git
+    rev: 25.9.0
+    hooks:
+      - id: black
+
+  # https://pycodestyle.pycqa.org/en/latest/intro.html#error-codes
+  #
+  # * E402: module level import not at top of file
+  #   server.py dynamically updates sys.path
+  # * E501: line too long (82 > 79 characters)
+  #   Let black worrry about formatting.
+  - repo: https://github.com/PyCQA/flake8.git
+    rev: 7.3.0
+    hooks:
+      - id: flake8
+        args:
+          - '--ignore=E402,E501'

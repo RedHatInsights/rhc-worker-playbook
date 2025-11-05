@@ -4,11 +4,14 @@ lib
 lib64
 include
 pip-selfcheck.json
-build
-dist
 libexec
 rhc_ansible_worker/contrib
-*.egg-info
-rhc_worker_playbook/constants.py
-scripts/rhc-worker-playbook.worker
 rhc-worker-playbook.spec
+
+# make dist && make wheels
+/.eggs/
+/build/
+/dist/
+/rhc_worker_playbook.egg-info/
+/rhc_worker_playbook/constants.py
+/wheels/
