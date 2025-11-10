@@ -13,7 +13,7 @@ LIBEXECDIR	?= $(PREFIX)/libexec
 WORKER_FILE	?= $(LIBEXECDIR)/rhc/$(PKGNAME).worker
 CONFIG_FILE	?= /etc/rhc/workers/$(PKGNAME).toml
 
-SOURCES := $(shell git ls-files '*.py' rhc-worker-playbook.toml)
+SOURCES := $(shell find . -name '*.py' ! -name 'constants.py' -o -name 'rhc-worker-playbook.toml')
 
 dist: rhc_worker_playbook/constants.py $(SOURCES)
 	$(PYTHON) setup.py sdist

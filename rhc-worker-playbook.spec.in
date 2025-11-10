@@ -1,33 +1,39 @@
+%{?python_disable_dependency_generator}
 %define _debugsource_template %{nil}
 %define community_general_version 4.4.0
 %define ansible_posix_version 1.3.0
+%global debug_package %{nil}
 
 Name:       rhc-worker-playbook
 Version:    @PKGVER@
 Release:    @RELEASE@%{?dist}
 Summary:    Python worker for Red Hat connector that launches Ansible Runner
-License:    GPL-2.0-or-later
+License:    GPLv2+
 URL:        https://github.com/redhatinsights/rhc-worker-playbook
-Source:     rhc-worker-playbook-%{version}.tar.gz
+Source:     %{name}-%{version}.tar.gz
 Source1:    https://github.com/ansible-collections/community.general/archive/%{community_general_version}/ansible-collection-community-general-%{community_general_version}.tar.gz
 Source2:    https://github.com/ansible-collections/ansible.posix/archive/%{ansible_posix_version}/ansible-collection-ansible-posix-%{ansible_posix_version}.tar.gz
 
-%{?__python3:Requires: %{__python3}}
+Requires: python3.9
 Requires: insights-client
-Requires: python3dist(requests)
-Requires: python3dist(pyyaml)
 Requires: ansible-core
-BuildRequires: pkgconfig
+Requires: python3.9dist(requests)
+Requires: python3.9dist(pyyaml)
+Requires: python3.9dist(toml)
+Requires: rhc
+BuildRequires: make
 BuildRequires: python3-devel
-BuildRequires: python3dist(pip)
-BuildRequires: python3dist(wheel)
-BuildRequires: python3dist(setuptools)
+BuildRequires: python3.9dist(pip)
+BuildRequires: python3.9dist(wheel)
+BuildRequires: python3.9dist(setuptools)
+%ifarch aarch64 ppc64 ppc64le s390x
 BuildRequires: openssl-devel
 BuildRequires: c-ares-devel
 BuildRequires: zlib-devel
-BuildRequires: python3dist(cython)
+BuildRequires: python3.9dist(cython)
 BuildRequires: gcc
 BuildRequires: gcc-c++
+%endif
 
 ExcludeArch:   i686
 
@@ -53,16 +59,18 @@ find -type f -name '.gitignore' -print -delete
 popd
 
 %build
+%ifarch ppc64 ppc64le s390x
+%define _lto_cflags %{nil}
+%set_build_flags
 export GRPC_PYTHON_BUILD_WITH_CYTHON=True
 export GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=True
 export GRPC_PYTHON_BUILD_SYSTEM_ZLIB=True
 export GRPC_PYTHON_BUILD_SYSTEM_CARES=True
 export GRPC_PYTHON_DISABLE_LIBC_COMPATIBILITY=True
-%define rhc_config_dir %{_sysconfdir}/rhc-worker-playbook
-
-%define _lto_cflags %{nil}
-%set_build_flags
-%{make_build} PREFIX=%{_prefix} LIBDIR=%{_libdir} CONFIG_DIR=%{rhc_config_dir} PYTHON_PKGDIR=%{python3_sitelib} build
+%endif
+# remove and remake the constants file for the correct LIBDIR
+rm -f rhc_worker_playbook/constants.py
+%{__make} LIBDIR=%{_libdir} wheels
 
 # Building the Ansible Collections
 pushd community.general-%{community_general_version}
@@ -74,7 +82,7 @@ tar -cf %{_tmppath}/ansible-posix-%{ansible_posix_version}.tar.gz .
 popd
 
 %install
-%{make_install} PREFIX=%{_prefix} LIBDIR=%{_libdir} CONFIG_DIR=%{rhc_config_dir} PYTHON_PKGDIR=%{python3_sitelib}
+%{make_install} PREFIX=%{_prefix} LIBDIR=%{_libdir}
 
 # Installing the Ansible Collections
 mkdir -p %{buildroot}%{_datadir}/rhc-worker-playbook/ansible/collections/ansible_collections/community/general
@@ -91,15 +99,14 @@ popd
 # Creating the logs directory for ansible-runner
 mkdir -p %{buildroot}%{_localstatedir}/log/rhc-worker-playbook/ansible/
 
-
 %files
 %{_libexecdir}/rhc/rhc-worker-playbook.worker
 %{python3_sitelib}/rhc_worker_playbook/
-%{python3_sitelib}/rhc_worker_playbook*.egg-info/
+%{python3_sitelib}/rhc_worker_playbook*.dist-info/
 %{_libdir}/rhc-worker-playbook/
 %{_datadir}/rhc-worker-playbook/ansible/collections/ansible_collections/
 %{_localstatedir}/log/rhc-worker-playbook/ansible/
-%config(noreplace) %{_sysconfdir}/rhc-worker-playbook/rhc-worker-playbook.toml
+%config(noreplace) %{_sysconfdir}/rhc/workers/rhc-worker-playbook.toml
 
 %doc
 
