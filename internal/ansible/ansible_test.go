@@ -1,12 +1,8 @@
 package ansible
 
 import (
-	"bytes"
 	"reflect"
-	"strings"
 	"testing"
-
-	"git.sr.ht/~spc/go-log"
 )
 
 // test that the raw job event is filtered down
@@ -36,7 +32,7 @@ func TestFilterJobEvent(t *testing.T) {
        "uuid": "080027c2-7382-b2cc-1967-000000000001"
 	}`)
 
-	filteredJobEventData := filterJobEvent(sampleJobEventData)
+	filteredJobEventData, err := filterJobEvent(sampleJobEventData)
 
 	// should be filtered (different) since attributes were reduced
 	if reflect.DeepEqual(filteredJobEventData, sampleJobEventData) {
@@ -45,6 +41,11 @@ func TestFilterJobEvent(t *testing.T) {
 			string(sampleJobEventData),
 			string(filteredJobEventData),
 		)
+	}
+
+	// there should be no error
+	if err != nil {
+		t.Errorf("Received unexpected error value: %v", err)
 	}
 }
 
@@ -78,22 +79,19 @@ func TestFilterJobEventFails(t *testing.T) {
        "uuid": "080027c2-7382-b2cc-1967-000000000001"
 	}`)
 
-	// capture stderr
-	var buf bytes.Buffer
-	log.SetOutput(&buf)
-	filteredJobEventData := filterJobEvent(sampleJobEventData)
+	filteredJobEventData, err := filterJobEvent(sampleJobEventData)
 
-	// should be identical
-	if !reflect.DeepEqual(filteredJobEventData, sampleJobEventData) {
+	// should be nil
+	if filteredJobEventData != nil {
 		t.Errorf(
 			"EXPECTED: %v\nRECEIVED: %v",
-			string(sampleJobEventData),
+			nil,
 			string(filteredJobEventData),
 		)
 	}
 
-	// error should be logged
-	if !strings.Contains(buf.String(), "error filtering job event") {
-		t.Errorf("Filtering error was not logged: %v.", buf.String())
+	// error should be returned
+	if err == nil {
+		t.Errorf("Received unexpected error value: %v", err)
 	}
 }
