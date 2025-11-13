@@ -4,22 +4,21 @@ specfile_path: rhc-worker-playbook.spec
 
 srpm_build_deps:
   - make
-  - python3dist(cython)
-  - python3dist(pip)
-  - python3dist(wheel)
   - rpm-build
 
 actions:
   post-upstream-clone:
-    - make rhc-worker-playbook.spec
+    # copr doesn't have python 3.9
+    - make PYTHON=python3 rhc-worker-playbook.spec
   get-current-version:
     - awk '/^Version:/ {print $2;}' rhc-worker-playbook.spec
   create-archive:
-    - make tarball
-    - bash -c 'echo dist/rhc-worker-playbook-*.tar.*'
+    # copr doesn't have python 3.9
+    - make PYTHON=python3 dist
+    - bash -c 'echo dist/rhc_worker_playbook-*.tar.*'
   fix-spec-file:
-    - bash -c 'echo "No action needed"'
-
+    # copr has newer python that forces underscores on package tarballs
+    - sed -i 's/%{name}/rhc_worker_playbook/' rhc-worker-playbook.spec
 jobs:
   - job: copr_build
     trigger: pull_request
@@ -31,6 +30,13 @@ jobs:
       - rhel-9-aarch64
       - rhel-9-x86_64
 
+      # included for verifying we can build dependency wheels from source
+      # RHEL also builds for these
+      - centos-stream-9-s390x
+      - centos-stream-9-ppc64le
+      - rhel-9-s390x
+    enable_net: true
+
   - job: copr_build
     trigger: commit
     branch: "release-0.1"
@@ -41,6 +47,13 @@ jobs:
       - centos-stream-9-x86_64
       - rhel-9-aarch64
       - rhel-9-x86_64
+
+      # included for verifying we can build dependency wheels from source
+      # RHEL also builds for these
+      - centos-stream-9-s390x
+      - centos-stream-9-ppc64le
+      - rhel-9-s390x
+    enable_net: true
 
   - job: tests
     trigger: pull_request
