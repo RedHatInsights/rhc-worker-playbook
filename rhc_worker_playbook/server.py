@@ -26,6 +26,7 @@ import yaml
 from requests import Request
 from rhc_worker_playbook.dispatcher_events import executor_on_start, executor_on_failed
 from rhc_worker_playbook.protocol import yggdrasil_pb2_grpc, yggdrasil_pb2
+from rhc_worker_playbook.filter_event import filter_event
 
 
 def _log(message: str) -> None:
@@ -127,7 +128,16 @@ class Events(list):
         except AttributeError:
             # one of the fields was null/empty
             pass
-        self.append(event)
+
+        # log the full event
+        _log(str(event))
+
+        # send the filtered event back to RHC
+        self.append(filter_event(event))
+
+        # this method must return True for ansible to save job events to disk
+        #   at RUNNER_ARTIFACTS_DIR/{runId}/job_events
+        return True
 
 
 class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
