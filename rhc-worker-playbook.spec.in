@@ -15,7 +15,7 @@ Source1:    https://github.com/ansible-collections/community.general/archive/%{c
 Source2:    https://github.com/ansible-collections/ansible.posix/archive/%{ansible_posix_version}/ansible-collection-ansible-posix-%{ansible_posix_version}.tar.gz
 
 Requires: python3.9
-Requires: insights-client
+Requires: rhc-playbook-verifier
 Requires: ansible-core
 Requires: python3.9dist(requests)
 Requires: python3.9dist(pyyaml)
