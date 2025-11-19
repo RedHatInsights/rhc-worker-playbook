@@ -67,11 +67,8 @@ BuildRequires:      python3dist(pip)
 BuildRequires:      systemd-rpm-macros
 BuildRequires:      python3-rpm-macros
 
-%if %{with check}
-BuildRequires:      insights-client
-%endif
-
 Requires:           ansible-core
+Requires:           rhc-playbook-verifier
 
 %description        %{common_description}
 

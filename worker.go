@@ -93,7 +93,7 @@ func rx(
 	}
 
 	if config.DefaultConfig.VerifyPlaybook {
-		d, err := verifyPlaybook(data, config.DefaultConfig.InsightsCoreGPGCheck)
+		d, err := verifyPlaybook(data)
 		if err != nil {
 			return fmt.Errorf("cannot verify playbook: err=%w", err)
 		}
@@ -237,25 +237,20 @@ func (e *EventManager) transmitEvents(events []json.RawMessage) error {
 // ansible.playbook_verifier Python module, passes data as the process's
 // standard input. If the playbook passes verification, the playbook, stripped
 // of "insights_signature" variables is returned.
-func verifyPlaybook(data []byte, insightsCoreGPGCheck bool) ([]byte, error) {
+func verifyPlaybook(data []byte) ([]byte, error) {
 	env := []string{
 		"PATH=/sbin:/bin:/usr/sbin:/usr/bin",
 	}
-	args := []string{
-		"-m",
-		"insights.client.apps.ansible.playbook_verifier",
-		"--quiet",
-		"--payload",
-		"noop",
-		"--content-type",
-		"noop",
-	}
-	if !insightsCoreGPGCheck {
-		args = append(args, "--no-gpg")
-		env = append(env, "BYPASS_GPG=True")
-	}
+
+	args := []string{"--stdin"}
+
 	stdin := bytes.NewReader(data)
-	stdout, stderr, code, err := exec.RunProcess("/usr/bin/insights-client", args, env, stdin)
+	stdout, stderr, code, err := exec.RunProcess(
+		"/usr/libexec/rhc-playbook-verifier",
+		args,
+		env,
+		stdin,
+	)
 	if err != nil {
 		log.Debugf(
 			"cannot verify playbook: code=%v stdout=%v stderr=%v",
