@@ -1,7 +1,7 @@
 default_language_version:
   python: python3.9
 
-exclude: ^rhc_worker_playbook/protocol/
+exclude: '^rhc_worker_playbook/protocol/'
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -15,6 +15,22 @@ repos:
     rev: 25.9.0
     hooks:
       - id: black
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.18.2
+    hooks:
+      - id: mypy
+        additional_dependencies:
+          - types-PyYAML
+          - types-grpcio
+          - types-jsonschema
+          - types-protobuf
+          - types-requests
+          - types-setuptools
+          - types-toml
+        # prevent mypy from discovering rhc_worker_playbook/protocol/*
+        args:
+          - --follow-imports
+          - silent
 
   # https://pycodestyle.pycqa.org/en/latest/intro.html#error-codes
   #

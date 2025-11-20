@@ -19,7 +19,7 @@ from rhc_worker_playbook.constants import (
 # Make vendored dependencies available.
 sys.path.insert(0, WORKER_LIB_DIR)
 
-import ansible_runner
+import ansible_runner  # type:ignore
 import grpc
 import toml
 import yaml
