@@ -2,11 +2,13 @@ package ansible
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"git.sr.ht/~spc/go-log"
@@ -34,6 +36,22 @@ type Runner struct {
 	stopJobEventsWatch  chan struct{}
 	stopStatusFileWatch chan struct{}
 	timeout             time.Duration
+
+	// lastEventStdout holds the output of the latest event and should be
+	// updated on event receipt in handleJobEvent.
+	//
+	// In the Python-based rhc-worker-playbook 0.1, events were stored in an array,
+	// and if a failure occurred, the stdout of the last event in the array
+	// was captured and transmitted as failure details back to Insights.
+	//
+	// In the Go implementation, events are sent to a channel, and the data is not
+	// accessible outside the scope of handleJobEvent once it returns. In order
+	// to retain the functionality of version 0.1, store the latest event's stdout
+	// so it can be communicated in the event of an Ansible failure.
+	lastEventStdout string
+	// lastEventLock is a mutex to control r/w to lastEventStdout
+	// since event handling is buried in goroutines
+	lastEventLock sync.RWMutex
 }
 
 // NewRunner creates a new Runner, uniquely identified by ID.
@@ -45,6 +63,7 @@ func NewRunner(ID string, timeout time.Duration) *Runner {
 		stopJobEventsWatch:  make(chan struct{}),
 		stopStatusFileWatch: make(chan struct{}),
 		timeout:             timeout,
+		lastEventStdout:     "null",
 	}
 }
 
@@ -231,6 +250,16 @@ func (r *Runner) handleJobEvent(event notify.EventInfo) {
 			filteredModifiedData = modifiedData
 		}
 
+		// update lastEventStdout. If there is no stdout property, set to "null"
+		eventStdout, ok := ansibleEvent["stdout"].(string)
+		if !ok {
+			eventStdout = "null"
+		}
+
+		r.lastEventLock.Lock()
+		r.lastEventStdout = eventStdout
+		r.lastEventLock.Unlock()
+
 		r.Events <- filteredModifiedData
 		log.Debugf("event sent: event=%v", prettyJson(filteredModifiedData))
 	}
@@ -239,6 +268,8 @@ func (r *Runner) handleJobEvent(event notify.EventInfo) {
 // handleStatusFileEvent is the handler function invoked when the status file is
 // written to.
 func (r *Runner) handleStatusFileEvent(event notify.EventInfo) {
+	// TODO: what happens to the playbook process when the status file is unreadable?
+	//	and/or what happens when this function returns without closing the channels?
 	data, err := os.ReadFile(event.Path())
 	if err != nil {
 		log.Errorf("failed to read status file: err=%v", err)
@@ -251,17 +282,11 @@ func (r *Runner) handleStatusFileEvent(event notify.EventInfo) {
 	if status == "failed" {
 		// publish an "executor_on_failed" event to signal
 		// cloud connector that a run has failed.
-		event := map[string]interface{}{
-			"event":      "executor_on_failed",
-			"uuid":       uuid.New().String(),
-			"counter":    -1,
-			"start_line": 0,
-			"end_line":   0,
-			"event_data": map[string]interface{}{
-				"crc_dispatcher_correlation_id": r.ID,
-				"crc_dispatcher_error_code":     "UNDEFINED_ERROR",
-			},
-		}
+		r.lastEventLock.RLock()
+		defer r.lastEventLock.RUnlock()
+		statusFailedError := errors.New(r.lastEventStdout)
+		log.Errorf("playbook run failed: err=%v", statusFailedError)
+		event := GenerateExecutorOnFailedEvent(r.ID, "UNDEFINED_ERROR", statusFailedError)
 
 		data, err := json.Marshal(event)
 		if err != nil {
@@ -323,6 +348,23 @@ func (r *Runner) watch(
 		case event := <-watchedEvents:
 			handler(event)
 		}
+	}
+}
+
+// GenerateExecutorOnFailedEvent creates a special executor_on_failed event
+// to inform Insights that the Ansible job failed to run.
+func GenerateExecutorOnFailedEvent(correlationID string, errorCode string, errorDetails error) map[string]any {
+	return map[string]interface{}{
+		"event":      "executor_on_failed",
+		"uuid":       uuid.New().String(),
+		"counter":    -1,
+		"start_line": 0,
+		"end_line":   0,
+		"event_data": map[string]any{
+			"crc_dispatcher_correlation_id": correlationID,
+			"crc_dispatcher_error_code":     errorCode,
+			"crc_details":                   errorDetails,
+		},
 	}
 }
 
