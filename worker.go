@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -92,16 +93,26 @@ func rx(
 		responseInterval = 500 * time.Millisecond
 	}
 
+	// Create the event manager.
+	eventManager := NewEventManager(id, returnURL, responseInterval, w)
+
 	if config.DefaultConfig.VerifyPlaybook {
 		d, err := verifyPlaybook(data)
 		if err != nil {
-			return fmt.Errorf("cannot verify playbook: err=%w", err)
+			verifyPlaybookError := fmt.Errorf("cannot verify playbook: err=%w", err)
+
+			// If playbook verification fails, send the error back to insights
+			failureEvent := ansible.GenerateExecutorOnFailedEvent(correlationID, "ANSIBLE_PLAYBOOK_SIGNATURE_VALIDATION_FAILED", verifyPlaybookError)
+
+			jsonString, err2 := json.Marshal(failureEvent)
+			if err2 != nil {
+				return errors.Join(verifyPlaybookError, fmt.Errorf("cannot marshal JSON: err=%w", err2))
+			}
+			eventManager.transmitEvents([]json.RawMessage{json.RawMessage(jsonString)})
+			return verifyPlaybookError
 		}
 		data = d
 	}
-
-	// Create the event manager.
-	eventManager := NewEventManager(id, returnURL, responseInterval, w)
 
 	// Create the playbook runner.
 	runner := ansible.NewRunner(correlationID, 60*time.Minute)
