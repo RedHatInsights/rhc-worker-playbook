@@ -3,7 +3,7 @@ set -ux
 
 # Install required packages
 dnf --setopt install_weak_deps=False install -y \
-  podman git-core python3-pip python3-pytest rhc-worker-playbook yggdrasil
+  podman git-core python3-pip python3-pytest rhc-worker-playbook yggdrasil rhc-playbook-verifier
 
 # get to project root
 cd $(git rev-parse --show-toplevel)
