@@ -6,6 +6,7 @@ toolchain go1.23.8
 
 require (
 	git.sr.ht/~spc/go-log v0.1.1
+	github.com/agiledragon/gomonkey/v2 v2.13.0
 	github.com/goccy/go-yaml v1.12.0
 	github.com/google/go-cmp v0.7.0
 	github.com/google/uuid v1.6.0

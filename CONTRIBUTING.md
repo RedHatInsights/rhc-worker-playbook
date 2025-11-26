@@ -135,7 +135,7 @@ for review. This allows to catch errors as early as possible.
 ### Preferred way to run the tests
 
 ``` shell
-go test ./
+go test -gcflags=all=-l ./
 ```
 
 ## Code Guidelines
