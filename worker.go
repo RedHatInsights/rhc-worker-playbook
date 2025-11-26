@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -92,16 +93,45 @@ func rx(
 		responseInterval = 500 * time.Millisecond
 	}
 
+	// Create the event manager.
+	eventManager := NewEventManager(id, returnURL, responseInterval, w)
+
 	if config.DefaultConfig.VerifyPlaybook {
 		d, err := verifyPlaybook(data)
 		if err != nil {
-			return fmt.Errorf("cannot verify playbook: err=%w", err)
+			verifyPlaybookError := err
+
+			// If playbook verification fails, send the error back to insights
+			// An executor_on_start event is needed since this is prior to Runner initialization
+			startEvent := ansible.GenerateExecutorOnStartEvent(correlationID, uuid.New)
+			failureEvent := ansible.GenerateExecutorOnFailedEvent(
+				correlationID,
+				"ANSIBLE_PLAYBOOK_SIGNATURE_VALIDATION_FAILED",
+				verifyPlaybookError,
+				uuid.New,
+			)
+
+			jsonString, err := json.Marshal([]map[string]any{startEvent, failureEvent})
+			// combine errors and return if JSON serialization fails
+			if err != nil {
+				return errors.Join(
+					verifyPlaybookError,
+					fmt.Errorf("cannot marshal JSON: err=%w", err),
+				)
+			}
+
+			if err := eventManager.transmitEvents([]json.RawMessage{json.RawMessage(jsonString)}); err != nil {
+				// combine errors and return if transmit fails
+				return errors.Join(
+					verifyPlaybookError,
+					fmt.Errorf("cannot transmit events: err=%w", err),
+				)
+			}
+
+			return verifyPlaybookError
 		}
 		data = d
 	}
-
-	// Create the event manager.
-	eventManager := NewEventManager(id, returnURL, responseInterval, w)
 
 	// Create the playbook runner.
 	runner := ansible.NewRunner(correlationID, 60*time.Minute)
@@ -230,6 +260,16 @@ func (e *EventManager) transmitEvents(events []json.RawMessage) error {
 	)
 	log.Tracef("responseBody=%v", string(responseBody))
 
+	if responseCode >= 400 {
+		// return an error if HTTP status code is 400 and up
+		return fmt.Errorf(
+			"server returned error response: code=%v responseMetadata=%v responseBody=%v",
+			responseCode,
+			responseMetadata,
+			string(responseBody),
+		)
+	}
+
 	return nil
 }
 
@@ -252,18 +292,17 @@ func verifyPlaybook(data []byte) ([]byte, error) {
 		stdin,
 	)
 	if err != nil {
-		log.Debugf(
+		verifyPlaybookError := fmt.Errorf(
 			"cannot verify playbook: code=%v stdout=%v stderr=%v",
 			code,
 			string(stdout),
 			string(stderr),
 		)
-		return nil, fmt.Errorf("cannot verify playbook: %v", err)
+		return nil, verifyPlaybookError
 	}
 
-	if code > 0 {
-		return nil, fmt.Errorf("playbook verification failed: %v", string(stderr))
-	}
+	// verification succeeds, log here
+	log.Info("Playbook verified.")
 
 	// Register a custom unmarshaler to support the YAML 1.1 boolean types
 	// "yes/no" and "on/off".

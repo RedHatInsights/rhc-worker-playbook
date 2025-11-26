@@ -2,6 +2,7 @@ package ansible
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -35,6 +36,10 @@ type Runner struct {
 	stopStatusFileWatch chan struct{}
 	timeout             time.Duration
 }
+
+// createUuidFunc is a function that returns a UUID, typically uuid.New(),
+// used as a function parameter to decouple uuid generation from function logic
+type createUuidFunc func() uuid.UUID
 
 // NewRunner creates a new Runner, uniquely identified by ID.
 func NewRunner(ID string, timeout time.Duration) *Runner {
@@ -101,17 +106,7 @@ func (r *Runner) Run(playbook []byte) error {
 	// channel doesn't have a receiver connected yet to avoid blocking the
 	// continuation of this function.
 	go func() {
-		event := map[string]interface{}{
-			"event":      "executor_on_start",
-			"uuid":       uuid.New().String(),
-			"counter":    -1,
-			"stdout":     "",
-			"start_line": 0,
-			"end_line":   0,
-			"event_data": map[string]interface{}{
-				"crc_dispatcher_correlation_id": r.ID,
-			},
-		}
+		event := GenerateExecutorOnStartEvent(r.ID, uuid.New)
 		data, err := json.Marshal(event)
 		if err != nil {
 			log.Errorf("cannot marshal json: err=%v", err)
@@ -239,6 +234,8 @@ func (r *Runner) handleJobEvent(event notify.EventInfo) {
 // handleStatusFileEvent is the handler function invoked when the status file is
 // written to.
 func (r *Runner) handleStatusFileEvent(event notify.EventInfo) {
+	// TODO [RHINENG-22379]: what happens to the playbook process when the status file is unreadable?
+	//	and/or what happens when this function returns without closing the channels?
 	data, err := os.ReadFile(event.Path())
 	if err != nil {
 		log.Errorf("failed to read status file: err=%v", err)
@@ -251,17 +248,9 @@ func (r *Runner) handleStatusFileEvent(event notify.EventInfo) {
 	if status == "failed" {
 		// publish an "executor_on_failed" event to signal
 		// cloud connector that a run has failed.
-		event := map[string]interface{}{
-			"event":      "executor_on_failed",
-			"uuid":       uuid.New().String(),
-			"counter":    -1,
-			"start_line": 0,
-			"end_line":   0,
-			"event_data": map[string]interface{}{
-				"crc_dispatcher_correlation_id": r.ID,
-				"crc_dispatcher_error_code":     "UNDEFINED_ERROR",
-			},
-		}
+		statusFailedError := errors.New("playbook run failed")
+		log.Error(statusFailedError)
+		event := GenerateExecutorOnFailedEvent(r.ID, "UNDEFINED_ERROR", statusFailedError, uuid.New)
 
 		data, err := json.Marshal(event)
 		if err != nil {
@@ -323,6 +312,47 @@ func (r *Runner) watch(
 		case event := <-watchedEvents:
 			handler(event)
 		}
+	}
+}
+
+// GenerateExecutorOnStartEvent creates a special executor_on_start event
+// to inform Insights that the Ansible job is beginning.
+func GenerateExecutorOnStartEvent(
+	correlationID string,
+	uuidNew createUuidFunc,
+) map[string]any {
+	return map[string]any{
+		"event":      "executor_on_start",
+		"uuid":       uuidNew().String(),
+		"counter":    -1,
+		"stdout":     "",
+		"start_line": 0,
+		"end_line":   0,
+		"event_data": map[string]any{
+			"crc_dispatcher_correlation_id": correlationID,
+		},
+	}
+}
+
+// GenerateExecutorOnFailedEvent creates a special executor_on_failed event
+// to inform Insights that the Ansible job failed to run.
+func GenerateExecutorOnFailedEvent(
+	correlationID string,
+	errorCode string,
+	errorDetails error,
+	uuidNew createUuidFunc,
+) map[string]any {
+	return map[string]any{
+		"event":      "executor_on_failed",
+		"uuid":       uuidNew().String(),
+		"counter":    -1,
+		"start_line": 0,
+		"end_line":   0,
+		"event_data": map[string]any{
+			"crc_dispatcher_correlation_id": correlationID,
+			"crc_dispatcher_error_code":     errorCode,
+			"crc_dispatcher_error_details":  errorDetails.Error(),
+		},
 	}
 }
 

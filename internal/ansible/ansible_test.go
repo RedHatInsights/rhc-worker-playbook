@@ -1,9 +1,20 @@
 package ansible
 
 import (
+	"errors"
 	"reflect"
 	"testing"
+
+	"github.com/google/uuid"
 )
+
+// seed uuid.New function for deterministic tests
+var seededUuidString string = "080027c2-7382-b2cc-1967-000000000001"
+var seededUuid uuid.UUID = uuid.MustParse(seededUuidString)
+
+func mockUuid() uuid.UUID {
+	return seededUuid
+}
 
 // test that the raw job event is filtered down
 func TestFilterJobEvent(t *testing.T) {
@@ -93,5 +104,62 @@ func TestFilterJobEventFails(t *testing.T) {
 	// error should be returned
 	if err == nil {
 		t.Errorf("Received unexpected error value: %v", err)
+	}
+}
+
+func TestGenerateExecutorOnFailedEvent(t *testing.T) {
+
+	expectedFailureEvent := map[string]any{
+		"event":      "executor_on_failed",
+		"uuid":       seededUuidString,
+		"counter":    -1,
+		"start_line": 0,
+		"end_line":   0,
+		"event_data": map[string]any{
+			"crc_dispatcher_correlation_id": "dcdc7b28-6800-4af9-983a-60fda58a7156",
+			"crc_dispatcher_error_code":     "TEST_ERROR",
+			"crc_dispatcher_error_details":  "playbook run failed",
+		},
+	}
+	receivedFailureEvent := GenerateExecutorOnFailedEvent(
+		"dcdc7b28-6800-4af9-983a-60fda58a7156",
+		"TEST_ERROR",
+		errors.New("playbook run failed"),
+		mockUuid,
+	)
+
+	if !reflect.DeepEqual(expectedFailureEvent, receivedFailureEvent) {
+		t.Errorf(
+			"EXPECTED: %v\nRECEIVED: %v",
+			expectedFailureEvent,
+			receivedFailureEvent,
+		)
+	}
+}
+
+func TestGenerateExecutorOnStartEvent(t *testing.T) {
+
+	expectedStartEvent := map[string]any{
+		"event":      "executor_on_start",
+		"uuid":       seededUuidString,
+		"counter":    -1,
+		"stdout":     "",
+		"start_line": 0,
+		"end_line":   0,
+		"event_data": map[string]any{
+			"crc_dispatcher_correlation_id": "dcdc7b28-6800-4af9-983a-60fda58a7156",
+		},
+	}
+	receivedStartEvent := GenerateExecutorOnStartEvent(
+		"dcdc7b28-6800-4af9-983a-60fda58a7156",
+		mockUuid,
+	)
+
+	if !reflect.DeepEqual(expectedStartEvent, receivedStartEvent) {
+		t.Errorf(
+			"EXPECTED: %v\nRECEIVED: %v",
+			expectedStartEvent,
+			receivedStartEvent,
+		)
 	}
 }
