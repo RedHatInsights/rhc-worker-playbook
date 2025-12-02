@@ -93,7 +93,7 @@ def test_playbook_execution_timeout_greater_than_one_min(
             2. The uploads do not continue indefinitely once execution completes
     """
     playbook_url = "http://localhost:8000/resources/pause1m.yml"
-    repsonse_interval = 30
+    response_interval = 30
 
     subprocess.run(
         ["systemctl", "restart", "com.redhat.Yggdrasil1.Worker1.rhc_worker_playbook"]
@@ -101,7 +101,7 @@ def test_playbook_execution_timeout_greater_than_one_min(
     subprocess.run(["systemctl", "restart", "yggdrasil"])
 
     logger.info(f"Playbook will be downloaded from: {playbook_url}")
-    data_message = build_data_msg_for_worker_playbook(response_interval=repsonse_interval, content=playbook_url)
+    data_message = build_data_msg_for_worker_playbook(response_interval=response_interval, content=playbook_url)
     topic = mqtt_data_topic()
 
     logger.info(f"Publishing message to MQTT broker. Topic: {topic}")
@@ -118,7 +118,7 @@ def test_playbook_execution_timeout_greater_than_one_min(
     # wait just over 30 seconds (response interval) after the playbook finishes to make sure no more uploads come in 
     number_of_uploads_at_playbook_finish = len(http_server.request_bodies)
     start_time = time.time()
-    while (time.time() - start_time) < repsonse_interval + 5:
+    while (time.time() - start_time) < response_interval + 5:
         if len(http_server.request_bodies) > number_of_uploads_at_playbook_finish:
             # something came in after upload finished, this is a failure case
             assert False
