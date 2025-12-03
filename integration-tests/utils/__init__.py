@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 def build_data_msg_for_worker_playbook(
     response_interval=600,
-    content="http://localhost:8000/cq:qreate_file.yml",
+    content="http://localhost:8000/create_file.yml",
     **data
 ):
     """
