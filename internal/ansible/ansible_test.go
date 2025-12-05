@@ -1,8 +1,12 @@
 package ansible
 
 import (
+	"errors"
 	"reflect"
 	"testing"
+
+	"github.com/agiledragon/gomonkey/v2"
+	"github.com/google/uuid"
 )
 
 // test that the raw job event is filtered down
@@ -93,5 +97,40 @@ func TestFilterJobEventFails(t *testing.T) {
 	// error should be returned
 	if err == nil {
 		t.Errorf("Received unexpected error value: %v", err)
+	}
+}
+
+func TestGenerateExecutorOnFailedEvent(t *testing.T) {
+
+	// monkeypatch the uuid.New() function so the output matches the test data
+	patched := gomonkey.ApplyFunc(uuid.New, func() uuid.UUID {
+		return uuid.MustParse("080027c2-7382-b2cc-1967-000000000001")
+	})
+	defer patched.Reset()
+
+	expectedFailureEvent := map[string]any{
+		"event":      "executor_on_failed",
+		"uuid":       "080027c2-7382-b2cc-1967-000000000001",
+		"counter":    -1,
+		"start_line": 0,
+		"end_line":   0,
+		"event_data": map[string]any{
+			"crc_dispatcher_correlation_id": "dcdc7b28-6800-4af9-983a-60fda58a7156",
+			"crc_dispatcher_error_code":     "TEST_ERROR",
+			"crc_details":                   "playbook run failed",
+		},
+	}
+	receivedFailureEvent := GenerateExecutorOnFailedEvent(
+		"dcdc7b28-6800-4af9-983a-60fda58a7156",
+		"TEST_ERROR",
+		errors.New("playbook run failed"),
+	)
+
+	if !reflect.DeepEqual(expectedFailureEvent, receivedFailureEvent) {
+		t.Errorf(
+			"EXPECTED: %v\nRECEIVED: %v",
+			expectedFailureEvent,
+			receivedFailureEvent,
+		)
 	}
 }

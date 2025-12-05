@@ -15,33 +15,51 @@ from requests_toolbelt.multipart import decoder
 
 logger = logging.getLogger(__name__)
 
+
 class FakeServer(HTTPServer):
+    """
+    Mock an HTTP server to accept uploads
+    """
+
     post_body = None
     # save the requests so we can reference them when the playbook finishes
     # prior to the fix, rhc-worker-playbook on RHEL 10 would
     #   upload endlessly because of a broken goroutine
     request_bodies = []
 
+
 class FakeRequestHandler(SimpleHTTPRequestHandler):
+    """
+    Request handler for the mock HTTP server
+    """
+
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, directory='./integration-tests', **kwargs)
-    
+        super().__init__(*args, directory="./integration-tests", **kwargs)
+
     def do_GET(self):
         super().do_GET()
 
     def do_POST(self):
-        content_length = int(self.headers.get('Content-Length', 0))
-        content_type = self.headers.get('Content-Type')
+        content_length = int(self.headers.get("Content-Length", 0))
+        content_type = self.headers.get("Content-Type")
         body = self.rfile.read(content_length)
 
         decoded_body = decoder.MultipartDecoder(body, content_type).parts[0].text
 
+        # save the upload to the FakeServer object so we can assert against it
         self.server.post_body = decoded_body
         self.server.request_bodies.append(decoded_body)
         logger.info(decoded_body)
         self.send_response(201)
         self.end_headers()
         self.wfile.write(b"Accepted")
+
+
+class FakeRequestHandlerPOSTFails(FakeRequestHandler):
+    def do_POST(self):
+        self.send_response(500)
+        self.end_headers()
+        self.wfile.write(b"Error")
 
 
 @pytest.hookimpl(trylast=True)
@@ -54,20 +72,29 @@ def pytest_configure(config):
         pytest.rhel_major_version = "unknown"
 
 
+@pytest.fixture()
+def request_handler():
+    """
+    Request handler to use with http_server fixture.
+    Defined separately so it can be overridden.
+    """
+    return FakeRequestHandler
+
+
 @pytest.fixture
-def http_server():
+def http_server(request_handler):
     """
     Run http server in current directory, it enables download of playbooks.
     """
     logger.info("Starting http server in 5s...")
     time.sleep(5)
-    server = FakeServer(("localhost", 8000), FakeRequestHandler)
+    server = FakeServer(("localhost", 8000), request_handler)
     executor = concurrent.futures.ThreadPoolExecutor()
     executor.submit(server.serve_forever)
     executor.shutdown(wait=False)
 
     yield server
-    
+
     server.shutdown()
     server.server_close()
 
@@ -88,8 +115,17 @@ def rhc_worker_test_file():
         pass
 
 
+@pytest.fixture()
+def enable_verify_playbook():
+    """
+    Fixture for setting whether to verify playbooks in the rhc-worker-playbook config.
+    Defined separately so it can be overridden.
+    """
+    return False
+
+
 @pytest.fixture
-def rhc_worker_playbook_config_for_worker_test():
+def rhc_worker_playbook_config_for_worker_test(enable_verify_playbook):
     """Setup rhc-worker-playbook configuration for the rhc-worker-playbook test,
     disabling playbook verification for custom written playbooks.
 
@@ -100,9 +136,8 @@ def rhc_worker_playbook_config_for_worker_test():
     backup_path = "/etc/rhc-worker-playbook/rhc-worker-playbook_backup.toml"
     shutil.copyfile(config_path, backup_path)
     config = toml.load(config_path)
-    config["verify-playbook"] = False
-    config["insights-core-gpg-check"] = False
-    config["log-level"] = "debug"
+    config["verify-playbook"] = enable_verify_playbook
+    config["log-level"] = "trace"
     with open(config_path, "w") as configfile:
         toml.dump(config, configfile)
 
@@ -168,7 +203,13 @@ def log_journalctl_rhc_worker_logs():
     """Print rhc-worker-playbook logs"""
     try:
         logs = subprocess.check_output(
-            ["journalctl", "-u", "com.redhat.Yggdrasil1.Worker1.rhc_worker_playbook", "--no-pager"], text=True
+            [
+                "journalctl",
+                "-u",
+                "com.redhat.Yggdrasil1.Worker1.rhc_worker_playbook",
+                "--no-pager",
+            ],
+            text=True,
         )
         logger.info(logs)
     except subprocess.CalledProcessError as e:
@@ -181,7 +222,7 @@ def log_all_service_logs():
     print("YGGDRASIL SERVICE LOGS:")
     print("=" * 80)
     log_journalctl_yggdrasil_logs()
-    
+
     print("=" * 80)
     print("RHC-WORKER-PLAYBOOK SERVICE LOGS:")
     print("=" * 80)
@@ -192,9 +233,7 @@ def log_all_service_logs():
 def pytest_runtest_makereport(item, call):
     """Hook to print service logs if test fails"""
     if call.when == "call" and call.excinfo is not None:
-        print(
-            f"Test '{item.name}' Failed. Service logs during test are below."
-        )
+        print(f"Test '{item.name}' Failed. Service logs during test are below.")
         log_all_service_logs()
 
 
@@ -202,4 +241,15 @@ def pytest_runtest_makereport(item, call):
 def manage_journal_logs():
     """Fixture to rotate journal logs before each test"""
     clear_journal_logs()
+    yield
+
+
+@pytest.fixture()
+def restart_services():
+    """Restart the services for each test"""
+
+    subprocess.run(
+        ["systemctl", "restart", "com.redhat.Yggdrasil1.Worker1.rhc_worker_playbook"]
+    )
+    subprocess.run(["systemctl", "restart", "yggdrasil"])
     yield
