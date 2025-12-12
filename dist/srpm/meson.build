@@ -2,12 +2,13 @@ git = find_program('git')
 rpmbuild = find_program('rpmbuild')
 tar = find_program('tar')
 bash = find_program('bash')
+go = find_program('go')
 
 commit = run_command(git, 'rev-parse', 'HEAD', capture: true, check: true).stdout().strip()
 
 if get_option('vendor')
   run_command(
-    [bash, files(meson.project_source_root() / 'build-aux' / 'vendor.sh')],
+    go, 'mod', 'vendor',
     check: true,
   )
 endif
