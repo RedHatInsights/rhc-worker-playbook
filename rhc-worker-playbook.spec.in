@@ -10,31 +10,39 @@ Release:    @RELEASE@%{?dist}
 Summary:    Python worker for Red Hat connector that launches Ansible Runner
 License:    GPLv2+
 URL:        https://github.com/redhatinsights/rhc-worker-playbook
-Source:     %{name}-%{version}.tar.gz
+Source0:     %{name}-%{version}.tar.gz
 Source1:    https://github.com/ansible-collections/community.general/archive/%{community_general_version}/ansible-collection-community-general-%{community_general_version}.tar.gz
 Source2:    https://github.com/ansible-collections/ansible.posix/archive/%{ansible_posix_version}/ansible-collection-ansible-posix-%{ansible_posix_version}.tar.gz
+Source3:    %pypi_source ansible-runner 2.1.1
+Source4:    %pypi_source python_daemon 3.1.2
+Source5:    %pypi_source lockfile 0.12.2
+Source6:    %pypi_source grpcio 1.55.3
+Source7:    %pypi_source grpcio-tools 1.48.2
+Source8:    %pypi_source protobuf 3.20.0
 
 Requires: python3.9
+Requires: rhc
 Requires: rhc-playbook-verifier
 Requires: ansible-core
+Requires: python3.9dist(setuptools)
 Requires: python3.9dist(requests)
-Requires: python3.9dist(pyyaml)
 Requires: python3.9dist(toml)
 Requires: python3.9dist(jsonschema)
-Requires: rhc
+# ansible-runner dependencies
+Requires: python3.9dist(pexpect)
+Requires: python3.9dist(pyyaml)
+Requires: python3.9dist(six)
 BuildRequires: make
 BuildRequires: python3-devel
 BuildRequires: python3.9dist(pip)
 BuildRequires: python3.9dist(wheel)
 BuildRequires: python3.9dist(setuptools)
-%ifarch aarch64 ppc64 ppc64le s390x
 BuildRequires: openssl-devel
 BuildRequires: c-ares-devel
 BuildRequires: zlib-devel
 BuildRequires: python3.9dist(cython)
 BuildRequires: gcc
 BuildRequires: gcc-c++
-%endif
 
 ExcludeArch:   i686
 
@@ -60,7 +68,6 @@ find -type f -name '.gitignore' -print -delete
 popd
 
 %build
-%ifarch ppc64 ppc64le s390x
 %define _lto_cflags %{nil}
 %set_build_flags
 export GRPC_PYTHON_BUILD_WITH_CYTHON=True
@@ -68,10 +75,11 @@ export GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=True
 export GRPC_PYTHON_BUILD_SYSTEM_ZLIB=True
 export GRPC_PYTHON_BUILD_SYSTEM_CARES=True
 export GRPC_PYTHON_DISABLE_LIBC_COMPATIBILITY=True
-%endif
+
 # remove and remake the constants file for the correct LIBDIR
 rm -f rhc_worker_playbook/constants.py
-%{__make} LIBDIR=%{_libdir} wheels
+%{__make} LIBDIR=%{_libdir} rhc_worker_playbook/constants.py
+%{python3} -m pip wheel --no-deps --wheel-dir=wheels . %{SOURCE3} %{SOURCE4} %{SOURCE5} %{SOURCE6} %{SOURCE7} %{SOURCE8}
 
 # Building the Ansible Collections
 pushd community.general-%{community_general_version}
@@ -83,7 +91,9 @@ tar -cf %{_tmppath}/ansible-posix-%{ansible_posix_version}.tar.gz .
 popd
 
 %install
-%{make_install} PREFIX=%{_prefix} LIBDIR=%{_libdir}
+%{make_install} PREFIX=%{_prefix} LIBDIR=%{_libdir} DEPENDENCY_WHEELS="wheels/ansible* wheels/grpcio* wheels/protobuf* wheels/python_daemon* wheels/lockfile*" PIP_INSTALL_EXTRA_ARGS="--no-deps"
+# confirm Python dependencies are OK
+PYTHONPATH=%{_libdir} %{python3} -m pip check
 
 # Installing the Ansible Collections
 mkdir -p %{buildroot}%{_datadir}/rhc-worker-playbook/ansible/collections/ansible_collections/community/general

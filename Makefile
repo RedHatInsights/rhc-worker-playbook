@@ -14,6 +14,8 @@ WORKER_FILE	?= $(LIBEXECDIR)/rhc/$(PKGNAME).worker
 CONFIG_FILE	?= /etc/rhc/workers/$(PKGNAME).toml
 
 SOURCES := $(shell find . -name '*.py' ! -name 'constants.py' -o -name 'rhc-worker-playbook.toml')
+DEPENDENCY_WHEELS ?= wheels/ansible* wheels/grpcio* wheels/protobuf* wheels/requests* wheels/toml*
+PIP_INSTALL_EXTRA_ARGS ?=
 
 dist: rhc_worker_playbook/constants.py $(SOURCES)
 	$(PYTHON) setup.py sdist
@@ -32,7 +34,7 @@ rhc_worker_playbook/constants.py: rhc_worker_playbook/constants.py.in
 .PHONY: install
 install: wheels
 	# vendored deps
-	$(PYTHON) -m pip install wheels/ansible* wheels/grpcio* wheels/protobuf* wheels/requests* wheels/toml* --no-index --find-links wheels --no-compile --target $(DESTDIR)$(LIBDIR)/$(PKGNAME)
+	$(PYTHON) -m pip install $(DEPENDENCY_WHEELS) --no-index --find-links wheels --no-compile --target $(DESTDIR)$(LIBDIR)/$(PKGNAME) $(PIP_INSTALL_EXTRA_ARGS)
 	#
 	# rhc-worker-playbook package
 	$(PYTHON) -m pip install wheels/rhc_worker_playbook* --no-index --no-deps --no-compile --prefix=$(DESTDIR)$(PREFIX)
