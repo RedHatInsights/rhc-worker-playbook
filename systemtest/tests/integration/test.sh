@@ -3,7 +3,17 @@ set -ux
 
 # Install required packages
 dnf --setopt install_weak_deps=False install -y \
-  podman git-core python3-pip python3-pytest rhc-worker-playbook yggdrasil rhc-playbook-verifier
+  podman git-core python3-pip python3-pytest yggdrasil rhc-playbook-verifier
+
+# TEST_RPMS is set in jenkins jobs after parsing CI Messages in gating Jobs.
+# If TEST_RPMS is set then install the RPM builds for gating.
+if [[ -v TEST_RPMS ]]; then
+  echo "Installing RPMs: ${TEST_RPMS}"
+  dnf -y install --allowerasing ${TEST_RPMS}
+else
+  # Fallback to installing from repository if TEST_RPMS is not set
+  dnf --setopt install_weak_deps=False install -y rhc rhc-worker-playbook
+fi
 
 # get to project root
 cd $(git rev-parse --show-toplevel)
