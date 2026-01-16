@@ -62,7 +62,7 @@ def get_yggdrasil_client_id():
     return yggdrasil_client_id
 
 
-def verify_playbook_execution_status(crc_dispatcher_correlation_id, timeout=30):
+def verify_playbook_execution_status(crc_dispatcher_correlation_id, timeout=60):
     """
     This method returns True if the playbook execution succeeds else False
     """
