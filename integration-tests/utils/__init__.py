@@ -62,7 +62,7 @@ def get_yggdrasil_client_id():
     return yggdrasil_client_id
 
 
-def verify_playbook_execution_status(crc_dispatcher_correlation_id, timeout=30):
+def verify_playbook_execution_status(crc_dispatcher_correlation_id, timeout=60):
     """
     This method returns True if the playbook execution succeeds else False
     """
@@ -74,6 +74,9 @@ def verify_playbook_execution_status(crc_dispatcher_correlation_id, timeout=30):
                 if "successful" in f.read():
                     return True
         time.sleep(5)
+        print(f"Waiting for playbook execution status file to be created. Time elapsed: {time.time() - start_time} seconds")
+        print(f"Execution status file path: {execution_status_file_path}")
+        print(f"Execution status file contents: {open(execution_status_file_path).read()}") #TODO: remove this after debugging
     return False
 
 
