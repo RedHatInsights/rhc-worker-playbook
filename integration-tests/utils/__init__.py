@@ -150,21 +150,21 @@ def verify_playbook_verification_failure_upload(http_server, timeout=30):
     start_time = time.time()
     while (time.time() - start_time) < timeout:
         if http_server.post_body:
-            json_obj = http_server.post_body.strip()
+            req_body = http_server.post_body.strip()
             logger.info(http_server.post_body)
-            parsed = json.loads(json_obj)
+            json_lines = req_body.split("\n")
 
             # there should be 2 events - start and failed
-            if len(parsed) != 2:
+            if len(json_lines) != 2:
                 return False
 
             # the first event should be a start event
-            event_1 = parsed[0]
+            event_1 = json.loads(json_lines[0])
             if not (event_1.get("event") == "executor_on_start"):
                 return False
 
             # the second event should be a failure event
-            event_2 = parsed[1]
+            event_2 = json.loads(json_lines[1])
             if not (
                 event_2.get("event") == "executor_on_failed"
                 and event_2.get("event_data", {}).get("crc_dispatcher_error_code")
