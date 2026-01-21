@@ -229,3 +229,39 @@ def test_playbook_verify_failure_event_upload_failure(
     logger.info("Verifying failure event upload failed......")
 
     assert verify_playbook_failure_upload_failed()
+
+
+@pytest.mark.parametrize("enable_verify_playbook", [True])
+@pytest.mark.skipif(
+    pytest.rhel_major_version == "unknown" or int(pytest.rhel_major_version) < 10,
+    reason="This test is only supported on RHEL10 and above",
+)
+def test_playbook_verify_failure_invalid_signature_exclude(
+    http_server,
+    rhc_worker_playbook_config_for_worker_test,
+    yggdrasil_config_for_local_mqtt_broker,
+    restart_services,
+):
+    """
+    test_steps:
+        1. Build a MQTT message to run the playbook
+        2. Publish the message to the MQTT topic
+        3. Verify the playbook fails verification in the system log
+        4. Verify that the failure event is uploaded
+    expected_results:
+        1. The playbook fails verification and the event is logged to both journald and http
+    """
+    # this playbook has an "insights_signature_exclude" property that has no definition in the playbook
+    playbook_url = "http://localhost:8000/resources/invalidSignatureExclude.yaml"
+
+    logger.info(f"Playbook will be downloaded from: {playbook_url}")
+    data_message = build_data_msg_for_worker_playbook(content=playbook_url)
+    topic = mqtt_data_topic()
+
+    logger.info(f"Publishing message to MQTT broker. Topic: {topic}")
+    publish_message(topic=topic, payload=json.dumps(data_message))
+
+    logger.info("Verifying playbook verification failed......")
+
+    assert verify_playbook_verification_failure_log()
+    assert verify_playbook_verification_failure_upload(http_server)

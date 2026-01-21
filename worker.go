@@ -111,7 +111,7 @@ func rx(
 				uuid.New,
 			)
 
-			jsonString, err := json.Marshal([]map[string]any{startEvent, failureEvent})
+			startEventJsonString, err := json.Marshal(startEvent)
 			// combine errors and return if JSON serialization fails
 			if err != nil {
 				return errors.Join(
@@ -120,7 +120,20 @@ func rx(
 				)
 			}
 
-			if err := eventManager.transmitEvents([]json.RawMessage{json.RawMessage(jsonString)}); err != nil {
+			failureEventJsonString, err := json.Marshal(failureEvent)
+			// combine errors and return if JSON serialization fails
+			if err != nil {
+				return errors.Join(
+					verifyPlaybookError,
+					fmt.Errorf("cannot marshal JSON: err=%w", err),
+				)
+			}
+
+			if err := eventManager.transmitEvents(
+				[]json.RawMessage{
+					json.RawMessage(startEventJsonString),
+					json.RawMessage(failureEventJsonString),
+				}); err != nil {
 				// combine errors and return if transmit fails
 				return errors.Join(
 					verifyPlaybookError,
