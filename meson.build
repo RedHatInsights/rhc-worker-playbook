@@ -1,4 +1,4 @@
-project('rhc-worker-playbook', version : '0.2.4')
+project('rhc-worker-playbook', version : '0.2.5')
 
 go = find_program('go')
 dbus = dependency('dbus-1', version: '>=1.12')
