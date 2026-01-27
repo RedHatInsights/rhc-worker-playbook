@@ -219,6 +219,7 @@ class WorkerService(yggdrasil_pb2_grpc.WorkerServicer):
 
         # run playbook
         runnerThread, runner = ansible_runner.interface.run_async(
+            ident=crc_dispatcher_correlation_id,
             playbook=playbook,
             envvars={
                 "PYTHONPATH": WORKER_LIB_DIR,
