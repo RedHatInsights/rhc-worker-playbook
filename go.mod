@@ -1,8 +1,6 @@
 module github.com/redhatinsights/rhc-worker-playbook
 
-go 1.23.0
-
-toolchain go1.23.8
+go 1.24.11
 
 require (
 	git.sr.ht/~spc/go-log v0.1.1
