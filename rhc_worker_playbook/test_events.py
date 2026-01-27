@@ -36,7 +36,6 @@ class TestFilterEvent(unittest.TestCase):
             "end_line": 6,
             "stdout": "",
             "uuid": "93bbe81b-5992-4d70-8cdb-1cd4d9791710",
-            "runner_ident": "dcdc7b28-6800-4af9-983a-60fda58a7156",
         }
 
     def test_filter_event_default_schema_with_recursion(self) -> None:
@@ -80,7 +79,6 @@ class TestFilterEvent(unittest.TestCase):
             "end_line": 6,
             "stdout": "",
             "uuid": "93bbe81b-5992-4d70-8cdb-1cd4d9791710",
-            "runner_ident": "dcdc7b28-6800-4af9-983a-60fda58a7156",
             "event_data": {
                 "crc_dispatcher_correlation_id": "dcdc7b28-6800-4af9-983a-60fda58a7156",
                 "host": "localhost",

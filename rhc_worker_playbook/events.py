@@ -23,11 +23,6 @@ def create_ansible_event_validator() -> Draft7Validator:
         "properties": {
             "event": {"type": "string", "minLength": 3, "maxLength": 50},
             "uuid": {"type": "string", "format": "uuid"},
-            # The runner_ident property is not *currently* in the playbook dispatcher
-            # schema, but is included here to prepare for future improvements
-            # to discoverability of ansible-runner logs on the system.
-            # See: https://issues.redhat.com/browse/RHINENG-19062
-            "runner_ident": {"type": "string", "format": "uuid"},
             "counter": {"type": "integer"},
             "stdout": {"type": ["string", "null"]},
             "start_line": {"type": "integer", "minimum": 0},
