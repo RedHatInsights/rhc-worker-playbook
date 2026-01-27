@@ -10,7 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"git.sr.ht/~spc/go-log"
+	log "log/slog"
+
 	"github.com/google/uuid"
 	"github.com/redhatinsights/rhc-worker-playbook/internal/constants"
 	"github.com/redhatinsights/rhc-worker-playbook/internal/exec"
@@ -109,7 +110,7 @@ func (r *Runner) Run(playbook []byte) error {
 		event := GenerateExecutorOnStartEvent(r.ID, uuid.New)
 		data, err := json.Marshal(event)
 		if err != nil {
-			log.Errorf("cannot marshal json: err=%v", err)
+			log.Error(fmt.Sprintf("cannot marshal json: err=%v", err))
 			return
 		}
 		r.Events <- data
@@ -150,7 +151,7 @@ func (r *Runner) Run(playbook []byte) error {
 			),
 		},
 		func(pid int, stdout, stderr io.ReadCloser) {
-			log.Infof("run started: pid=%v", pid)
+			log.Info(fmt.Sprintf("run started: pid=%v", pid))
 		},
 	)
 
@@ -167,7 +168,7 @@ func (r *Runner) handleJobEvent(event notify.EventInfo) {
 	if strings.HasSuffix(event.Path(), ".json") && !strings.Contains(event.Path(), "partial") {
 		data, err := os.ReadFile(event.Path())
 		if err != nil {
-			log.Errorf("cannot read file: file=%v error=%v", event.Path(), err)
+			log.Error(fmt.Sprintf("cannot read file: file=%v error=%v", event.Path(), err))
 			return
 		}
 
@@ -179,12 +180,12 @@ func (r *Runner) handleJobEvent(event notify.EventInfo) {
 		// still be included in the data structure.
 		var ansibleEvent map[string]interface{}
 		if err := json.Unmarshal(data, &ansibleEvent); err != nil {
-			log.Errorf("cannot unmarshal data: data=%v error=%v", data, err)
+			log.Error(fmt.Sprintf("cannot unmarshal data: data=%v error=%v", data, err))
 			return
 		}
 
 		// log the full event
-		log.Debugf("received job event: %v", prettyJson(data))
+		log.Debug(fmt.Sprintf("received job event: %v", prettyJson(data)))
 
 		eventData, ok := ansibleEvent["event_data"]
 		if !ok {
@@ -213,7 +214,7 @@ func (r *Runner) handleJobEvent(event notify.EventInfo) {
 
 		modifiedData, err := json.Marshal(ansibleEvent)
 		if err != nil {
-			log.Errorf("cannot marshal JSON: err=%v", err)
+			log.Error(fmt.Sprintf("cannot marshal JSON: err=%v", err))
 			return
 		}
 
@@ -221,13 +222,13 @@ func (r *Runner) handleJobEvent(event notify.EventInfo) {
 
 		if err != nil {
 			// problem filtering, return original event
-			log.Errorf("error filtering job event: err=%v", err)
+			log.Error(fmt.Sprintf("error filtering job event: err=%v", err))
 			log.Info("sending unfiltered job event...")
 			filteredModifiedData = modifiedData
 		}
 
 		r.Events <- filteredModifiedData
-		log.Debugf("event sent: event=%v", prettyJson(filteredModifiedData))
+		log.Debug(fmt.Sprintf("event sent: event=%v", prettyJson(filteredModifiedData)))
 	}
 }
 
@@ -238,23 +239,23 @@ func (r *Runner) handleStatusFileEvent(event notify.EventInfo) {
 	//	and/or what happens when this function returns without closing the channels?
 	data, err := os.ReadFile(event.Path())
 	if err != nil {
-		log.Errorf("failed to read status file: err=%v", err)
+		log.Error(fmt.Sprintf("failed to read status file: err=%v", err))
 		return
 	}
 
 	status := string(data)
-	log.Infof("run complete: status=%v", status)
+	log.Info(fmt.Sprintf("run complete: status=%v", status))
 
 	if status == "failed" {
 		// publish an "executor_on_failed" event to signal
 		// cloud connector that a run has failed.
 		statusFailedError := errors.New("playbook run failed")
-		log.Error(statusFailedError)
+		log.Error(statusFailedError.Error())
 		event := GenerateExecutorOnFailedEvent(r.ID, "UNDEFINED_ERROR", statusFailedError, uuid.New)
 
 		data, err := json.Marshal(event)
 		if err != nil {
-			log.Errorf("cannot marshal JSON: err=%v", err)
+			log.Error(fmt.Sprintf("cannot marshal JSON: err=%v", err))
 			return
 		}
 		r.Events <- json.RawMessage(data)
@@ -293,17 +294,17 @@ func (r *Runner) watch(
 	defer close(watchedEvents)
 
 	if err := notify.Watch(path, watchedEvents, events...); err != nil {
-		log.Errorf("cannot watch path for events: path=%v err=%v", path, err)
+		log.Error(fmt.Sprintf("cannot watch path for events: path=%v err=%v", path, err))
 		return
 	}
 	defer notify.Stop(watchedEvents)
 
-	log.Tracef("start watching for events: path=%v events=%v", path, events)
-	defer log.Tracef("stop watching for events: path=%v", path)
+	log.Debug(fmt.Sprintf("start watching for events: path=%v events=%v", path, events))
+	defer log.Debug(fmt.Sprintf("stop watching for events: path=%v", path))
 	for {
 		select {
 		case <-timeout:
-			log.Infof("timeout elapsed watching for events: path=%v", path)
+			log.Info(fmt.Sprintf("timeout elapsed watching for events: path=%v", path))
 			// since the status file handler is not invoked, clean up channels here, otherwise it will upload forever
 			r.end()
 			return
@@ -377,12 +378,12 @@ func filterJobEvent(jobEventData []byte) ([]byte, error) {
 func prettyJson(jsonBytes []byte) string {
 	var jsonObject map[string]any
 	if err := json.Unmarshal(jsonBytes, &jsonObject); err != nil {
-		log.Errorf("cannot unmarshal JSON: err=%v", err)
+		log.Error(fmt.Sprintf("cannot unmarshal JSON: err=%v", err))
 		return ""
 	}
 	pretty, err := json.MarshalIndent(jsonObject, "", "\t")
 	if err != nil {
-		log.Errorf("cannot marshal JSON: err=%v", err)
+		log.Error(fmt.Sprintf("cannot marshal JSON: err=%v", err))
 		return fmt.Sprintf("%v", jsonObject)
 	}
 	return string(pretty)
