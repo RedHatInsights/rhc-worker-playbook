@@ -6,13 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	log "log/slog"
 	"mime/multipart"
 	"net/textproto"
 	"strings"
 	"sync"
 	"time"
 
-	"git.sr.ht/~spc/go-log"
 	"github.com/goccy/go-yaml"
 	"github.com/google/uuid"
 	"github.com/redhatinsights/rhc-worker-playbook/internal/ansible"
@@ -55,7 +55,7 @@ func rx(
 	metadata map[string]string,
 	data []byte,
 ) error {
-	log.Infof("message received: message-id=%v", id)
+	log.Info(fmt.Sprintf("message received: message-id=%v", id))
 
 	// Get returnURL from message metadata
 	returnURL, has := metadata["return_url"]
@@ -175,10 +175,10 @@ func (e *EventManager) processEvents(runner *ansible.Runner) {
 
 	// Transmit one final batch of all events.
 	if err := e.transmitEvents(e.cachedEvents); err != nil {
-		log.Errorf("cannot transmit events: err=%v", err)
+		log.Error(fmt.Sprintf("cannot transmit events: err=%v", err))
 	}
 
-	log.Infof("message finished: message-id=%v", e.id)
+	log.Info(fmt.Sprintf("message finished: message-id=%v", e.id))
 }
 
 // transmitCachedEvents periodically transmits a batch of cached events when the
@@ -218,13 +218,14 @@ func (e *EventManager) transmitCachedEvents() {
 
 			cachedEvents := append([]json.RawMessage{}, e.cachedEvents[batchStart:batchEnd]...)
 			e.cachedEventsLock.RUnlock()
-			log.Debugf(
-				"transmitting cached events: batchStart=%v batchEnd=%v",
-				batchStart,
-				batchEnd,
-			)
+			log.Debug(
+				fmt.Sprintf(
+					"transmitting cached events: batchStart=%v batchEnd=%v",
+					batchStart,
+					batchEnd,
+				))
 			if err := e.transmitEvents(cachedEvents); err != nil {
-				log.Errorf("cannot transmit events: err=%v", err)
+				log.Error(fmt.Sprintf("cannot transmit events: err=%v", err))
 				continue
 			}
 
@@ -266,12 +267,13 @@ func (e *EventManager) transmitEvents(events []json.RawMessage) error {
 	if err != nil {
 		return fmt.Errorf("cannot transmit data: err=%v", err)
 	}
-	log.Debugf(
-		"received response: code=%v responseMetadata=%v",
-		responseCode,
-		responseMetadata,
-	)
-	log.Tracef("responseBody=%v", string(responseBody))
+	log.Debug(
+		fmt.Sprintf(
+			"received response: code=%v responseMetadata=%v",
+			responseCode,
+			responseMetadata,
+		))
+	log.Debug(fmt.Sprintf("responseBody=%v", string(responseBody)))
 
 	if responseCode >= 400 {
 		// return an error if HTTP status code is 400 and up
@@ -369,7 +371,7 @@ func buildRequestBody(body string, filename string) (*bytes.Buffer, string, erro
 	defer func() {
 		closeErr := writer.Close()
 		if closeErr != nil {
-			log.Errorf("cannot close request body writer: %v", closeErr)
+			log.Error(fmt.Sprintf("cannot close request body writer: %v", closeErr))
 		}
 	}()
 

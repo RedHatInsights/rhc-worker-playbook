@@ -2,12 +2,13 @@ package main
 
 import (
 	"fmt"
+	log "log/slog"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"syscall"
 
-	"git.sr.ht/~spc/go-log"
+	// "git.sr.ht/~spc/go-log"
 	"github.com/redhatinsights/rhc-worker-playbook/internal/config"
 	"github.com/redhatinsights/rhc-worker-playbook/internal/constants"
 	"github.com/redhatinsights/yggdrasil/worker"
@@ -63,7 +64,8 @@ func main() {
 	app.Action = mainAction
 
 	if err := app.Run(os.Args); err != nil {
-		log.Fatal(err)
+		log.Error(err.Error())
+		os.Exit(1)
 	}
 }
 
@@ -83,11 +85,12 @@ func beforeAction(ctx *cli.Context) error {
 
 func mainAction(ctx *cli.Context) error {
 	loadConfigFromContext(ctx)
-	level, err := log.ParseLevel(config.DefaultConfig.LogLevel)
-	if err != nil {
-		return cli.Exit(fmt.Errorf("cannot unmarshal log-level: %w", err), 1)
-	}
-	log.SetLevel(level)
+	// level, err := log.ParseLevel(config.DefaultConfig.LogLevel)
+	// if err != nil {
+	// 	return cli.Exit(fmt.Errorf("cannot unmarshal log-level: %w", err), 1)
+	// }
+	// log.SetLevel(level)
+	log.SetLogLoggerLevel(log.LevelDebug)
 
 	w, err := worker.NewWorker(config.DefaultConfig.Directive, true, nil, nil, rx, nil)
 	if err != nil {
