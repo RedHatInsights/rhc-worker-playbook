@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"git.sr.ht/~spc/go-log"
 	"github.com/redhatinsights/rhc-worker-playbook/internal/config"
 	"github.com/redhatinsights/rhc-worker-playbook/internal/constants"
+	"github.com/redhatinsights/rhc-worker-playbook/internal/log"
 	"github.com/redhatinsights/yggdrasil/worker"
 	"github.com/urfave/cli/v2"
 	"github.com/urfave/cli/v2/altsrc"
@@ -63,7 +63,7 @@ func main() {
 	app.Action = mainAction
 
 	if err := app.Run(os.Args); err != nil {
-		log.Fatal(err)
+		log.Fatal(err.Error())
 	}
 }
 
@@ -85,7 +85,7 @@ func mainAction(ctx *cli.Context) error {
 	loadConfigFromContext(ctx)
 	level, err := log.ParseLevel(config.DefaultConfig.LogLevel)
 	if err != nil {
-		return cli.Exit(fmt.Errorf("cannot unmarshal log-level: %w", err), 1)
+		return cli.Exit(fmt.Errorf("%w", err), 1)
 	}
 	log.SetLevel(level)
 

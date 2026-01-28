@@ -12,12 +12,12 @@ import (
 	"sync"
 	"time"
 
-	"git.sr.ht/~spc/go-log"
 	"github.com/goccy/go-yaml"
 	"github.com/google/uuid"
 	"github.com/redhatinsights/rhc-worker-playbook/internal/ansible"
 	"github.com/redhatinsights/rhc-worker-playbook/internal/config"
 	"github.com/redhatinsights/rhc-worker-playbook/internal/exec"
+	"github.com/redhatinsights/rhc-worker-playbook/internal/log"
 	"github.com/redhatinsights/yggdrasil/worker"
 )
 
