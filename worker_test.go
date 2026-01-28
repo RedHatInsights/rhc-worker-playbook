@@ -1,12 +1,13 @@
 package main
 
 import (
+	"log/slog"
 	"os"
 	"os/exec"
 	"testing"
 
-	"git.sr.ht/~spc/go-log"
 	"github.com/google/go-cmp/cmp"
+	"github.com/redhatinsights/rhc-worker-playbook/internal/log"
 )
 
 func readFile(t *testing.T, file string) []byte {
@@ -51,7 +52,7 @@ func TestVerifyPlaybook(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
-			log.SetLevel(log.LevelDebug)
+			log.SetLevel(slog.LevelDebug)
 			got, err := verifyPlaybook(test.input.playbook)
 			if err != nil {
 				t.Fatal(err)

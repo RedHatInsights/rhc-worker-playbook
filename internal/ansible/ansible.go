@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"git.sr.ht/~spc/go-log"
 	"github.com/google/uuid"
 	"github.com/redhatinsights/rhc-worker-playbook/internal/constants"
 	"github.com/redhatinsights/rhc-worker-playbook/internal/exec"
+	"github.com/redhatinsights/rhc-worker-playbook/internal/log"
 	"github.com/rjeczalik/notify"
 )
 
@@ -249,7 +249,7 @@ func (r *Runner) handleStatusFileEvent(event notify.EventInfo) {
 		// publish an "executor_on_failed" event to signal
 		// cloud connector that a run has failed.
 		statusFailedError := errors.New("playbook run failed")
-		log.Error(statusFailedError)
+		log.Error(statusFailedError.Error())
 		event := GenerateExecutorOnFailedEvent(r.ID, "UNDEFINED_ERROR", statusFailedError, uuid.New)
 
 		data, err := json.Marshal(event)
