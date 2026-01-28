@@ -8,9 +8,25 @@ import (
 	"strings"
 )
 
-var LevelFatal slog.Level = 99
-var LevelTrace slog.Level = -8
-var LevelUnknown slog.Level = -99
+var LevelFatal slog.Level = slog.Level(12)
+var LevelTrace slog.Level = slog.Level(-8)
+var LevelUnknown slog.Level = slog.Level(-99)
+
+// custom handler so FATAL and TRACE level strings are represented in the log
+var logger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+	ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
+		if a.Key == slog.LevelKey {
+			level := a.Value.Any().(slog.Level)
+			switch level {
+			case LevelFatal:
+				a.Value = slog.StringValue("FATAL")
+			case LevelTrace:
+				a.Value = slog.StringValue("TRACE")
+			}
+		}
+		return a
+	},
+}))
 
 // ParseLevel parses the log level string to an slog.Level
 func ParseLevel(str string) (slog.Level, error) {
@@ -38,30 +54,30 @@ func SetLevel(level slog.Level) {
 
 // Debug wraps the slog.Debug method
 func Debug(msg string, args ...any) {
-	slog.Debug(msg, args...)
+	logger.Debug(msg, args...)
 }
 
 // Debugf wraps the slog.Debug method
 // and passes the arguments to fmt.Sprintf
 func Debugf(msg string, args ...any) {
-	slog.Debug(fmt.Sprintf(msg, args...))
+	logger.Debug(fmt.Sprintf(msg, args...))
 }
 
 // Error wraps the slog.Error method
 func Error(msg string, args ...any) {
-	slog.Error(msg, args...)
+	logger.Error(msg, args...)
 }
 
 // Errorf wraps the slog.Error method
 // and passes the arguments to fmt.Sprintf
 func Errorf(msg string, args ...any) {
-	slog.Error(fmt.Sprintf(msg, args...))
+	logger.Error(fmt.Sprintf(msg, args...))
 }
 
 // Fatal wraps the slog.Log method with a custom log level,
 // and mimics go's log.Fatal which calls os.Exit
 func Fatal(msg string, args ...any) {
-	slog.Log(context.TODO(), LevelFatal, msg, args...)
+	logger.Log(context.TODO(), LevelFatal, msg, args...)
 	os.Exit(1)
 }
 
@@ -69,38 +85,38 @@ func Fatal(msg string, args ...any) {
 // passes the arguments to fmt.Sprintf,
 // and mimics go's log.Fatal which calls os.Exit
 func Fatalf(msg string, args ...any) {
-	slog.Log(context.TODO(), LevelFatal, fmt.Sprintf(msg, args...))
+	logger.Log(context.TODO(), LevelFatal, fmt.Sprintf(msg, args...))
 	os.Exit(1)
 }
 
 // Info wraps the slog.Info method
 func Info(msg string, args ...any) {
-	slog.Info(msg, args...)
+	logger.Info(msg, args...)
 }
 
 // Infof wraps the slog.Info method
 // and passes the arguments to fmt.Sprintf
 func Infof(msg string, args ...any) {
-	slog.Info(fmt.Sprintf(msg, args...))
+	logger.Info(fmt.Sprintf(msg, args...))
 }
 
 // Trace wraps the slog.Log method with a custom log level,
 func Trace(msg string, args ...any) {
-	slog.Log(context.TODO(), LevelTrace, msg, args...)
+	logger.Log(context.TODO(), LevelTrace, msg, args...)
 }
 
 // Tracef wraps the slog.Log method with a custom log level
 // and passes the arguments to fmt.Sprintf
 func Tracef(msg string, args ...any) {
-	slog.Log(context.TODO(), LevelTrace, fmt.Sprintf(msg, args...))
+	logger.Log(context.TODO(), LevelTrace, fmt.Sprintf(msg, args...))
 }
 
 // Warn wraps the slog.Warn method
 func Warn(msg string, args ...any) {
-	slog.Warn(msg, args...)
+	logger.Warn(msg, args...)
 }
 
 // Warnf wraps the slog.Warn method
 func Warnf(msg string, args ...any) {
-	slog.Warn(fmt.Sprintf(msg, args...))
+	logger.Warn(fmt.Sprintf(msg, args...))
 }
