@@ -10,11 +10,11 @@ import (
 	"strings"
 	"time"
 
-	"git.sr.ht/~spc/go-log"
 	"github.com/google/uuid"
 	"github.com/redhatinsights/rhc-worker-playbook/internal/constants"
 	"github.com/redhatinsights/rhc-worker-playbook/internal/exec"
 	"github.com/rjeczalik/notify"
+	"github.com/subpop/go-log"
 )
 
 // Runner maintains the state of a playbook run during execution.

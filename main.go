@@ -7,10 +7,10 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"git.sr.ht/~spc/go-log"
 	"github.com/redhatinsights/rhc-worker-playbook/internal/config"
 	"github.com/redhatinsights/rhc-worker-playbook/internal/constants"
 	"github.com/redhatinsights/yggdrasil/worker"
+	"github.com/subpop/go-log"
 	"github.com/urfave/cli/v2"
 	"github.com/urfave/cli/v2/altsrc"
 )
