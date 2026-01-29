@@ -5,8 +5,8 @@ import (
 	"os/exec"
 	"testing"
 
-	"git.sr.ht/~spc/go-log"
 	"github.com/google/go-cmp/cmp"
+	"github.com/subpop/go-log"
 )
 
 func readFile(t *testing.T, file string) []byte {
