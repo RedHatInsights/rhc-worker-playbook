@@ -21,6 +21,7 @@ from conftest import FakeRequestHandlerPOSTFails
 logger = logging.getLogger(__name__)
 
 
+@pytest.mark.tier1
 @pytest.mark.skipif(
     pytest.rhel_major_version == "unknown" or int(pytest.rhel_major_version) < 10,
     reason="This test is only supported on RHEL10 and above",
@@ -70,6 +71,7 @@ def test_playbook_execution_local_broker(
     assert verify_uploaded_event_runner_data_is_filtered(http_server.post_body)
 
 
+@pytest.mark.tier1
 @pytest.mark.skipif(
     pytest.rhel_major_version == "unknown" or int(pytest.rhel_major_version) < 10,
     reason="This test is only supported on RHEL10 and above",
@@ -126,6 +128,7 @@ def test_playbook_execution_timeout_greater_than_one_min(
     assert number_of_uploads_at_playbook_finish == len(http_server.request_bodies)
 
 
+@pytest.mark.tier1
 @pytest.mark.parametrize("enable_verify_playbook", [True])
 @pytest.mark.skipif(
     pytest.rhel_major_version == "unknown" or int(pytest.rhel_major_version) < 10,
@@ -160,6 +163,7 @@ def test_playbook_verify_success(
     assert verify_playbook_verification_success_log()
 
 
+@pytest.mark.tier1
 @pytest.mark.parametrize("enable_verify_playbook", [True])
 @pytest.mark.skipif(
     pytest.rhel_major_version == "unknown" or int(pytest.rhel_major_version) < 10,
@@ -196,6 +200,7 @@ def test_playbook_verify_failure(
     assert verify_playbook_verification_failure_upload(http_server)
 
 
+@pytest.mark.tier1
 @pytest.mark.parametrize("enable_verify_playbook", [True])
 @pytest.mark.parametrize("request_handler", [FakeRequestHandlerPOSTFails])
 @pytest.mark.skipif(
@@ -231,6 +236,7 @@ def test_playbook_verify_failure_event_upload_failure(
     assert verify_playbook_failure_upload_failed()
 
 
+@pytest.mark.tier1
 @pytest.mark.parametrize("enable_verify_playbook", [True])
 @pytest.mark.skipif(
     pytest.rhel_major_version == "unknown" or int(pytest.rhel_major_version) < 10,
