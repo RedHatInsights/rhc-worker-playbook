@@ -100,6 +100,7 @@ def verify_uploaded_event_runner_data_is_filtered(req_body):
                 "start_line",
                 "end_line",
                 "event_data",
+                "runner_ident",
             ]:
                 return False
 
