@@ -25,6 +25,13 @@ type PlaybookRunResponseMessageEventsElem struct {
 
 	// Uuid corresponds to the JSON schema field "uuid".
 	Uuid string `json:"uuid"`
+
+	// RunnerIdent corresponds to the JSON schema field "runner_ident"
+	// The runner_ident property is not *currently* in the playbook dispatcher
+	// schema, but is included here to prepare for future improvements
+	// to discoverability of ansible-runner logs on the system.
+	// See: https://issues.redhat.com/browse/RHINENG-19062
+	RunnerIdent string `json:"runner_ident"`
 }
 
 // Structure of the "event_data" field in an ansible job event needed by playbook dispatcher
