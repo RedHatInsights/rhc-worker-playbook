@@ -10,11 +10,12 @@ import (
 	"strings"
 	"time"
 
+	"log/slog"
+
 	"github.com/google/uuid"
 	"github.com/redhatinsights/rhc-worker-playbook/internal/constants"
 	"github.com/redhatinsights/rhc-worker-playbook/internal/exec"
 	"github.com/rjeczalik/notify"
-	"github.com/subpop/go-log"
 )
 
 // Runner maintains the state of a playbook run during execution.
@@ -60,6 +61,8 @@ func NewRunner(ID string, timeout time.Duration) *Runner {
 func (r *Runner) Run(playbook []byte) error {
 	// write playbook to the filesystem
 	playbookPath := filepath.Join(constants.StateDir, r.ID+".yaml")
+	slog.Info("writing playbook to file:", "path", playbookPath)
+
 	if err := os.WriteFile(playbookPath, playbook, 0600); err != nil {
 		return fmt.Errorf("cannot write playbook file: path=%v err=%w", playbookPath, err)
 	}
@@ -67,6 +70,8 @@ func (r *Runner) Run(playbook []byte) error {
 	// precreate the job_events directory so that we can watch for when events
 	// get written to it.
 	jobEventsPath := filepath.Join(r.privateDataDir, "artifacts", r.ID, "job_events")
+	slog.Info("creating job_events directory:", "path", jobEventsPath)
+
 	if err := os.MkdirAll(jobEventsPath, 0755); err != nil {
 		return fmt.Errorf(
 			"cannot create job_events directory: directory=%v err=%w",
@@ -78,6 +83,8 @@ func (r *Runner) Run(playbook []byte) error {
 	// precreate the status file so that we can watch for when it gets written
 	// to.
 	statusFilePath := filepath.Join(r.privateDataDir, "artifacts", r.ID, "status")
+	slog.Info("writing status file:", "path", statusFilePath)
+
 	status, err := os.Create(statusFilePath)
 	if err != nil {
 		return fmt.Errorf("cannot create status file: file=%v err=%w", statusFilePath, err)
@@ -109,7 +116,7 @@ func (r *Runner) Run(playbook []byte) error {
 		event := GenerateExecutorOnStartEvent(r.ID, uuid.New)
 		data, err := json.Marshal(event)
 		if err != nil {
-			log.Errorf("cannot marshal json: err=%v", err)
+			slog.Error("cannot marshal json:", "err", err)
 			return
 		}
 		r.Events <- data
@@ -123,34 +130,43 @@ func (r *Runner) Run(playbook []byte) error {
 	// created automatically by ansible_runner
 	ansibleRemoteTmpPath := filepath.Join(ansibleHomePath, "remote-tmp")
 
+	args := []string{
+		"-m",
+		"ansible_runner",
+		"start",
+		"--ident",
+		r.ID,
+		"--playbook",
+		playbookPath,
+		r.privateDataDir,
+	}
+	env := []string{
+		"PATH=/sbin:/bin:/usr/sbin:/usr/bin",
+		"PYTHONPATH=" + filepath.Join(constants.LibDir, "rhc-worker-playbook"),
+		"PYTHONDONTWRITEBYTECODE=1",
+		"ANSIBLE_HOME=" + ansibleHomePath,
+		"ANSIBLE_REMOTE_TMP=" + ansibleRemoteTmpPath,
+		"ANSIBLE_COLLECTIONS_PATH=" + filepath.Join(
+			constants.DataDir,
+			"rhc-worker-playbook",
+			"ansible",
+			"collections",
+			"ansible_collections",
+		),
+	}
+
+	slog.Info("launching python3 (ansible-runner) subprocess")
+	slog.Debug("launching with parameters:",
+		"args", args,
+		"env", env,
+	)
+
 	err = exec.StartProcess(
 		"/usr/bin/python3",
-		[]string{
-			"-m",
-			"ansible_runner",
-			"start",
-			"--ident",
-			r.ID,
-			"--playbook",
-			playbookPath,
-			r.privateDataDir,
-		},
-		[]string{
-			"PATH=/sbin:/bin:/usr/sbin:/usr/bin",
-			"PYTHONPATH=" + filepath.Join(constants.LibDir, "rhc-worker-playbook"),
-			"PYTHONDONTWRITEBYTECODE=1",
-			"ANSIBLE_HOME=" + ansibleHomePath,
-			"ANSIBLE_REMOTE_TMP=" + ansibleRemoteTmpPath,
-			"ANSIBLE_COLLECTIONS_PATH=" + filepath.Join(
-				constants.DataDir,
-				"rhc-worker-playbook",
-				"ansible",
-				"collections",
-				"ansible_collections",
-			),
-		},
+		args,
+		env,
 		func(pid int, stdout, stderr io.ReadCloser) {
-			log.Infof("run started: pid=%v", pid)
+			slog.Info("run started:", "pid", pid)
 		},
 	)
 
@@ -164,10 +180,13 @@ func (r *Runner) Run(playbook []byte) error {
 // handleJobEvent is the handler function invoked each time a job_event file is
 // written to the job_events directory.
 func (r *Runner) handleJobEvent(event notify.EventInfo) {
-	if strings.HasSuffix(event.Path(), ".json") && !strings.Contains(event.Path(), "partial") {
-		data, err := os.ReadFile(event.Path())
+	eventPath := event.Path()
+	if strings.HasSuffix(eventPath, ".json") && !strings.Contains(eventPath, "partial") {
+		data, err := os.ReadFile(eventPath)
 		if err != nil {
-			log.Errorf("cannot read file: file=%v error=%v", event.Path(), err)
+			slog.Error("cannot read file:",
+				"file", eventPath,
+				"error", err)
 			return
 		}
 
@@ -179,12 +198,14 @@ func (r *Runner) handleJobEvent(event notify.EventInfo) {
 		// still be included in the data structure.
 		var ansibleEvent map[string]interface{}
 		if err := json.Unmarshal(data, &ansibleEvent); err != nil {
-			log.Errorf("cannot unmarshal data: data=%v error=%v", data, err)
+			slog.Error("cannot unmarshal data:",
+				"data", data,
+				"error", err)
 			return
 		}
 
 		// log the full event
-		log.Debugf("received job event: %v", prettyJson(data))
+		slog.Debug("received job event:", "event", prettyJson(data))
 
 		eventData, ok := ansibleEvent["event_data"]
 		if !ok {
@@ -213,7 +234,7 @@ func (r *Runner) handleJobEvent(event notify.EventInfo) {
 
 		modifiedData, err := json.Marshal(ansibleEvent)
 		if err != nil {
-			log.Errorf("cannot marshal JSON: err=%v", err)
+			slog.Error("cannot marshal JSON:", "err", err)
 			return
 		}
 
@@ -221,13 +242,13 @@ func (r *Runner) handleJobEvent(event notify.EventInfo) {
 
 		if err != nil {
 			// problem filtering, return original event
-			log.Errorf("error filtering job event: err=%v", err)
-			log.Info("sending unfiltered job event...")
+			slog.Error("error filtering job event:", "err", err)
+			slog.Info("sending unfiltered job event...")
 			filteredModifiedData = modifiedData
 		}
 
 		r.Events <- filteredModifiedData
-		log.Debugf("event sent: event=%v", prettyJson(filteredModifiedData))
+		slog.Debug("sent job event:", "event", prettyJson(filteredModifiedData))
 	}
 }
 
@@ -238,23 +259,23 @@ func (r *Runner) handleStatusFileEvent(event notify.EventInfo) {
 	//	and/or what happens when this function returns without closing the channels?
 	data, err := os.ReadFile(event.Path())
 	if err != nil {
-		log.Errorf("failed to read status file: err=%v", err)
+		slog.Error("failed to read status file:", "err", err)
 		return
 	}
 
 	status := string(data)
-	log.Infof("run complete: status=%v", status)
+	slog.Info("run complete:", "status", status)
 
 	if status == "failed" {
 		// publish an "executor_on_failed" event to signal
 		// cloud connector that a run has failed.
 		statusFailedError := errors.New("playbook run failed")
-		log.Error(statusFailedError)
+		slog.Error(statusFailedError.Error())
 		event := GenerateExecutorOnFailedEvent(r.ID, "UNDEFINED_ERROR", statusFailedError, uuid.New)
 
 		data, err := json.Marshal(event)
 		if err != nil {
-			log.Errorf("cannot marshal JSON: err=%v", err)
+			slog.Error("cannot marshal JSON:", "err", err)
 			return
 		}
 		r.Events <- json.RawMessage(data)
@@ -293,17 +314,23 @@ func (r *Runner) watch(
 	defer close(watchedEvents)
 
 	if err := notify.Watch(path, watchedEvents, events...); err != nil {
-		log.Errorf("cannot watch path for events: path=%v err=%v", path, err)
+		slog.Error("cannot watch path for events:",
+			"path", path,
+			"err", err,
+		)
 		return
 	}
 	defer notify.Stop(watchedEvents)
 
-	log.Tracef("start watching for events: path=%v events=%v", path, events)
-	defer log.Tracef("stop watching for events: path=%v", path)
+	slog.Info("start watching for events:",
+		"path", path,
+		"events", events,
+	)
+	defer slog.Info("stop watching for events:", "path", path)
 	for {
 		select {
 		case <-timeout:
-			log.Infof("timeout elapsed watching for events: path=%v", path)
+			slog.Info("timeout elapsed watching for events:", "path", path)
 			// since the status file handler is not invoked, clean up channels here, otherwise it will upload forever
 			r.end()
 			return
@@ -377,12 +404,12 @@ func filterJobEvent(jobEventData []byte) ([]byte, error) {
 func prettyJson(jsonBytes []byte) string {
 	var jsonObject map[string]any
 	if err := json.Unmarshal(jsonBytes, &jsonObject); err != nil {
-		log.Errorf("cannot unmarshal JSON: err=%v", err)
+		slog.Error("cannot unmarshal JSON:", "err", err)
 		return ""
 	}
 	pretty, err := json.MarshalIndent(jsonObject, "", "\t")
 	if err != nil {
-		log.Errorf("cannot marshal JSON: err=%v", err)
+		slog.Error("cannot marshal JSON:", "err", err)
 		return fmt.Sprintf("%v", jsonObject)
 	}
 	return string(pretty)
