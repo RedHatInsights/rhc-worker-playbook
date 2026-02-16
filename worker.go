@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"mime/multipart"
 	"net/textproto"
 	"strings"
@@ -18,7 +19,6 @@ import (
 	"github.com/redhatinsights/rhc-worker-playbook/internal/config"
 	"github.com/redhatinsights/rhc-worker-playbook/internal/exec"
 	"github.com/redhatinsights/yggdrasil/worker"
-	"github.com/subpop/go-log"
 )
 
 type EventManager struct {
@@ -55,7 +55,7 @@ func rx(
 	metadata map[string]string,
 	data []byte,
 ) error {
-	log.Infof("message received: message-id=%v", id)
+	slog.Info("message received:", "message-id", id)
 
 	// Get returnURL from message metadata
 	returnURL, has := metadata["return_url"]
@@ -73,7 +73,7 @@ func rx(
 	// value loaded from the configuration file.
 	responseIntervalString, has := metadata["response_interval"]
 	if !has {
-		log.Warn("metadata missing response_interval, defaulting to 300")
+		slog.Warn("metadata missing response_interval, defaulting to 300")
 		responseIntervalString = "300"
 	}
 	responseInterval, err := time.ParseDuration(responseIntervalString + "s")
@@ -175,10 +175,10 @@ func (e *EventManager) processEvents(runner *ansible.Runner) {
 
 	// Transmit one final batch of all events.
 	if err := e.transmitEvents(e.cachedEvents); err != nil {
-		log.Errorf("cannot transmit events: err=%v", err)
+		slog.Error("cannot transmit events:", "err", err)
 	}
 
-	log.Infof("message finished: message-id=%v", e.id)
+	slog.Info("message finished:", "message-id", e.id)
 }
 
 // transmitCachedEvents periodically transmits a batch of cached events when the
@@ -218,13 +218,13 @@ func (e *EventManager) transmitCachedEvents() {
 
 			cachedEvents := append([]json.RawMessage{}, e.cachedEvents[batchStart:batchEnd]...)
 			e.cachedEventsLock.RUnlock()
-			log.Debugf(
-				"transmitting cached events: batchStart=%v batchEnd=%v",
-				batchStart,
-				batchEnd,
+			slog.Info(
+				"transmitting cached events:",
+				"batchStart", batchStart,
+				"batchEnd", batchEnd,
 			)
 			if err := e.transmitEvents(cachedEvents); err != nil {
-				log.Errorf("cannot transmit events: err=%v", err)
+				slog.Error("cannot transmit events:", "err", err)
 				continue
 			}
 
@@ -266,12 +266,12 @@ func (e *EventManager) transmitEvents(events []json.RawMessage) error {
 	if err != nil {
 		return fmt.Errorf("cannot transmit data: err=%v", err)
 	}
-	log.Debugf(
-		"received response: code=%v responseMetadata=%v",
-		responseCode,
-		responseMetadata,
+	slog.Debug(
+		"received response:",
+		"responseCode", responseCode,
+		"responseMetadata", responseMetadata,
+		"responseBody", string(responseBody),
 	)
-	log.Tracef("responseBody=%v", string(responseBody))
 
 	if responseCode >= 400 {
 		// return an error if HTTP status code is 400 and up
@@ -291,13 +291,18 @@ func (e *EventManager) transmitEvents(events []json.RawMessage) error {
 // standard input. If the playbook passes verification, the playbook, stripped
 // of "insights_signature" variables is returned.
 func verifyPlaybook(data []byte) ([]byte, error) {
-	env := []string{
-		"PATH=/sbin:/bin:/usr/sbin:/usr/bin",
-	}
+	slog.Info("verifying playbook")
 
+	env := []string{"PATH=/sbin:/bin:/usr/sbin:/usr/bin"}
 	args := []string{"--stdin"}
-
 	stdin := bytes.NewReader(data)
+
+	slog.Info("launching rhc-playbook-verifier subprocess")
+	slog.Debug("launching with parameters:",
+		"args", args,
+		"env", env,
+		"stdin", stdin)
+
 	stdout, stderr, code, err := exec.RunProcess(
 		"/usr/libexec/rhc-playbook-verifier",
 		args,
@@ -315,7 +320,7 @@ func verifyPlaybook(data []byte) ([]byte, error) {
 	}
 
 	// verification succeeds, log here
-	log.Info("Playbook verified.")
+	slog.Info("playbook verified")
 
 	// Register a custom unmarshaler to support the YAML 1.1 boolean types
 	// "yes/no" and "on/off".
@@ -369,7 +374,7 @@ func buildRequestBody(body string, filename string) (*bytes.Buffer, string, erro
 	defer func() {
 		closeErr := writer.Close()
 		if closeErr != nil {
-			log.Errorf("cannot close request body writer: %v", closeErr)
+			slog.Error("cannot close request body writer:", "err", closeErr)
 		}
 	}()
 
