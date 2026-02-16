@@ -26,6 +26,10 @@ var (
 
 	// CacheDir is a path to a location where cache data can be stored.
 	CacheDir string
+
+	// PlaybookInProgressMarker is a path to a marker file that is created to communicate a playbook execution in progress,
+	// and deleted when a playbook is no longer in progress.
+	PlaybookInProgressMarker string
 )
 
 func init() {
@@ -60,4 +64,6 @@ func init() {
 	if CacheDir == "" {
 		CacheDir = filepath.Join(LocalStateDir, "cache", "rhc-worker-playbook")
 	}
+
+	PlaybookInProgressMarker = filepath.Join(StateDir, ".playbook-in-progress")
 }

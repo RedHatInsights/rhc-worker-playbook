@@ -193,6 +193,18 @@ def verify_playbook_failure_upload_failed(timeout=30):
         time.sleep(5)
     return False
 
+def verify_cant_run_two_playbooks(timeout=30):
+    """
+    This method returns True if the failure of playbook verification
+    is logged as an error, else False
+    """
+    start_time = time.time()
+    while (time.time() - start_time) < timeout:
+        if _is_in_journald_grep("a playbook run is already in progress"):
+            return True
+        time.sleep(5)
+    return False
+
 
 def _is_in_journald_grep(search_string):
     """

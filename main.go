@@ -89,6 +89,15 @@ func mainAction(ctx *cli.Context) error {
 	}
 	log.SetLevel(level)
 
+	// delete any cached .playbook-in-progress file from unexpected exit
+	if err := os.Remove(constants.PlaybookInProgressMarker); err != nil {
+		log.Infof(
+			"cannot delete the .playbook-in-progress file: path=%v err=%v",
+			constants.PlaybookInProgressMarker,
+			err,
+		)
+	}
+
 	w, err := worker.NewWorker(config.DefaultConfig.Directive, true, nil, nil, rx, nil)
 	if err != nil {
 		return cli.Exit(fmt.Errorf("cannot create worker: %w", err), 1)
