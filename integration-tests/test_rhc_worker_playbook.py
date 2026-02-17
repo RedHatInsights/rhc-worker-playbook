@@ -15,6 +15,7 @@ from utils import (
     verify_playbook_verification_success_log,
     verify_uploaded_event_runner_data_is_filtered,
     verify_playbook_failure_upload_failed,
+    verify_cant_run_two_playbooks
 )
 from conftest import FakeRequestHandlerPOSTFails
 
@@ -271,3 +272,60 @@ def test_playbook_verify_failure_invalid_signature_exclude(
 
     assert verify_playbook_verification_failure_log()
     assert verify_playbook_verification_failure_upload(http_server)
+
+@pytest.mark.tier1
+@pytest.mark.parametrize("enable_verify_playbook", [False])
+@pytest.mark.skipif(
+    pytest.rhel_major_version == "unknown" or int(pytest.rhel_major_version) < 10,
+    reason="This test is only supported on RHEL10 and above",
+)
+def test_playbook_in_progress_marker(
+    http_server,
+    rhc_worker_playbook_config_for_worker_test,
+    yggdrasil_config_for_local_mqtt_broker,
+    restart_services,
+): 
+    """
+    test_stops:
+    1. Verify the .playbook-in-progress file does not exist when service begins
+    2. Publish a message to MQTT to start a playbook run
+    3. Verify the .playbook-in-progress file exists while playbook is running
+    4. While playbook is running, attempt to run another playbook
+    5. Verify the second playbook fails to initialize
+    6. After first playbook run completes, verify the .playbook-in-progress does not exist
+    """    
+    playbook_in_progress_file = "/var/lib/rhc-worker-playbook/.playbook-in-progress"
+    
+    logger.info(f"Verifying {playbook_in_progress_file} does not exist prior to playbook run...")
+    assert not os.path.exists(playbook_in_progress_file)
+    
+    playbook_url = "http://localhost:8000/resources/pause1m.yml"
+
+    logger.info(f"Playbook will be downloaded from: {playbook_url}")
+    data_message = build_data_msg_for_worker_playbook(content=playbook_url)
+    topic = mqtt_data_topic()
+    
+    logger.info(f"Publishing message to MQTT broker. Topic: {topic}")
+    publish_message(topic=topic, payload=json.dumps(data_message))
+
+    # wait a few seconds for the playbook run to begin
+    time.sleep(5)
+    logger.info(f"Verifying {playbook_in_progress_file} exists during playbook run...")
+    assert os.path.exists(playbook_in_progress_file)
+    
+    # attempt to start another playbook, should fail
+    logger.info("Attempting to launch a simultaneous playbook run...")
+    logger.info(f"Publishing message to MQTT broker. Topic: {topic}")
+    data_message_2 = build_data_msg_for_worker_playbook(content=playbook_url)
+    publish_message(topic=topic, payload=json.dumps(data_message_2))
+    logger.info("Verifying that a simultaneous playbook run fails to start...")
+    assert verify_cant_run_two_playbooks()
+    
+    # wait for the first one to finish
+    assert verify_playbook_execution_status(
+        data_message["metadata"]["crc_dispatcher_correlation_id"], timeout=90
+    )
+    
+    # confirm the marker file is gone
+    logger.info(f"Verifying {playbook_in_progress_file} does not exist after playbook run...")
+    assert not os.path.exists(playbook_in_progress_file)

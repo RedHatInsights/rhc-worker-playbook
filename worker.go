@@ -8,6 +8,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/textproto"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -16,6 +17,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/redhatinsights/rhc-worker-playbook/internal/ansible"
 	"github.com/redhatinsights/rhc-worker-playbook/internal/config"
+	"github.com/redhatinsights/rhc-worker-playbook/internal/constants"
 	"github.com/redhatinsights/rhc-worker-playbook/internal/exec"
 	"github.com/redhatinsights/yggdrasil/worker"
 	"github.com/subpop/go-log"
@@ -96,51 +98,43 @@ func rx(
 	// Create the event manager.
 	eventManager := NewEventManager(id, returnURL, responseInterval, w)
 
+	if _, err := os.Stat(constants.PlaybookInProgressMarker); !errors.Is(err, os.ErrNotExist) {
+		// .playbook-in-progess exists, playbook is currently in progress
+		playbookAlreadyRunningErr := errors.New(
+			"a playbook run is already in progress, please wait until the current playbook finishes before executing another",
+		)
+		if err := communicateEarlyFailure(
+			playbookAlreadyRunningErr,
+			"ANSIBLE_PLAYBOOK_ALREADY_RUNNING",
+			correlationID,
+			eventManager,
+		); err != nil {
+			return err
+		}
+		return playbookAlreadyRunningErr
+	}
+
+	// create the .playbook-in-progress file to prevent other playbooks from running simultaneously
+	if _, err := os.Create(constants.PlaybookInProgressMarker); err != nil {
+		return fmt.Errorf(
+			"cannot create .playbook-in-progress file: file=%v err=%w",
+			constants.PlaybookInProgressMarker,
+			err,
+		)
+	}
+
 	if config.DefaultConfig.VerifyPlaybook {
 		d, err := verifyPlaybook(data)
 		if err != nil {
 			verifyPlaybookError := err
-
-			// If playbook verification fails, send the error back to insights
-			// An executor_on_start event is needed since this is prior to Runner initialization
-			startEvent := ansible.GenerateExecutorOnStartEvent(correlationID, uuid.New)
-			failureEvent := ansible.GenerateExecutorOnFailedEvent(
-				correlationID,
-				"ANSIBLE_PLAYBOOK_SIGNATURE_VALIDATION_FAILED",
+			if err := communicateEarlyFailure(
 				verifyPlaybookError,
-				uuid.New,
-			)
-
-			startEventJsonString, err := json.Marshal(startEvent)
-			// combine errors and return if JSON serialization fails
-			if err != nil {
-				return errors.Join(
-					verifyPlaybookError,
-					fmt.Errorf("cannot marshal JSON: err=%w", err),
-				)
+				"ANSIBLE_PLAYBOOK_SIGNATURE_VALIDATION_FAILED",
+				correlationID,
+				eventManager,
+			); err != nil {
+				return err
 			}
-
-			failureEventJsonString, err := json.Marshal(failureEvent)
-			// combine errors and return if JSON serialization fails
-			if err != nil {
-				return errors.Join(
-					verifyPlaybookError,
-					fmt.Errorf("cannot marshal JSON: err=%w", err),
-				)
-			}
-
-			if err := eventManager.transmitEvents(
-				[]json.RawMessage{
-					json.RawMessage(startEventJsonString),
-					json.RawMessage(failureEventJsonString),
-				}); err != nil {
-				// combine errors and return if transmit fails
-				return errors.Join(
-					verifyPlaybookError,
-					fmt.Errorf("cannot transmit events: err=%w", err),
-				)
-			}
-
 			return verifyPlaybookError
 		}
 		data = d
@@ -179,6 +173,15 @@ func (e *EventManager) processEvents(runner *ansible.Runner) {
 	}
 
 	log.Infof("message finished: message-id=%v", e.id)
+
+	// delete the .playbook-in-progress file at the end of the run
+	if err := os.Remove(constants.PlaybookInProgressMarker); err != nil {
+		log.Errorf(
+			"cannot delete the .playbook-in-progress file: path=%v err=%v",
+			constants.PlaybookInProgressMarker,
+			err,
+		)
+	}
 }
 
 // transmitCachedEvents periodically transmits a batch of cached events when the
@@ -395,4 +398,54 @@ func buildRequestBody(body string, filename string) (*bytes.Buffer, string, erro
 	outerContentType := fmt.Sprintf("multipart/form-data; boundary=%s", writer.Boundary())
 
 	return requestBody, outerContentType, nil
+}
+
+// communicateEarlyFailure handles sending failure events to playbook dispatcher
+// in the event that a failure occurs before ansible-runner begins
+func communicateEarlyFailure(
+	earlyFailureError error,
+	errorKey string,
+	correlationID string,
+	e *EventManager,
+) error {
+	// An executor_on_start event is needed since this is prior to Runner initialization
+	startEvent := ansible.GenerateExecutorOnStartEvent(correlationID, uuid.New)
+	failureEvent := ansible.GenerateExecutorOnFailedEvent(
+		correlationID,
+		errorKey,
+		earlyFailureError,
+		uuid.New,
+	)
+
+	startEventJsonString, err := json.Marshal(startEvent)
+	// combine errors and return if JSON serialization fails
+	if err != nil {
+		return errors.Join(
+			earlyFailureError,
+			fmt.Errorf("cannot marshal JSON: err=%w", err),
+		)
+	}
+
+	failureEventJsonString, err := json.Marshal(failureEvent)
+	// combine errors and return if JSON serialization fails
+	if err != nil {
+		return errors.Join(
+			earlyFailureError,
+			fmt.Errorf("cannot marshal JSON: err=%w", err),
+		)
+	}
+
+	if err := e.transmitEvents(
+		[]json.RawMessage{
+			json.RawMessage(startEventJsonString),
+			json.RawMessage(failureEventJsonString),
+		}); err != nil {
+		// combine errors and return if transmit fails
+		return errors.Join(
+			earlyFailureError,
+			fmt.Errorf("cannot transmit events: err=%w", err),
+		)
+	}
+
+	return nil
 }
