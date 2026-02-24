@@ -124,7 +124,7 @@ def verify_playbook_verification_success_log(timeout=30):
     """
     start_time = time.time()
     while (time.time() - start_time) < timeout:
-        if _is_in_journald_grep("Playbook verified."):
+        if _is_in_journald_grep("playbook verified"):
             return True
         time.sleep(5)
     return False
