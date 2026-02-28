@@ -13,12 +13,22 @@ URL:        https://github.com/redhatinsights/rhc-worker-playbook
 Source0:     %{name}-%{version}.tar.gz
 Source1:    https://github.com/ansible-collections/community.general/archive/%{community_general_version}/ansible-collection-community-general-%{community_general_version}.tar.gz
 Source2:    https://github.com/ansible-collections/ansible.posix/archive/%{ansible_posix_version}/ansible-collection-ansible-posix-%{ansible_posix_version}.tar.gz
-Source3:    %pypi_source ansible-runner 2.1.1
-Source4:    %pypi_source python_daemon 3.1.2
-Source5:    %pypi_source lockfile 0.12.2
-Source6:    %pypi_source grpcio 1.55.3
-Source7:    %pypi_source grpcio-tools 1.48.2
-Source8:    %pypi_source protobuf 3.20.0
+# ansible-runner dependencies
+Source3:    https://files.pythonhosted.org/packages/py3/a/ansible_runner/ansible_runner-2.1.1-py3-none-any.whl
+Source4:    https://files.pythonhosted.org/packages/py3/p/python_daemon/python_daemon-3.1.2-py3-none-any.whl
+Source5:    https://files.pythonhosted.org/packages/py2.py3/l/lockfile/lockfile-0.12.2-py2.py3-none-any.whl
+# x86_64 grpcio/protobuf sources
+Source6:    https://files.pythonhosted.org/packages/cp39/g/grpcio/grpcio-1.55.3-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+Source7:    https://files.pythonhosted.org/packages/cp39/g/grpcio_tools/grpcio_tools-1.48.2-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+Source8:    https://files.pythonhosted.org/packages/cp39/p/protobuf/protobuf-3.20.0-cp39-cp39-manylinux_2_5_x86_64.manylinux1_x86_64.whl
+# aarch64 grpcio/protobuf sources
+Source9:    https://files.pythonhosted.org/packages/cp39/g/grpcio/grpcio-1.55.3-cp39-cp39-manylinux_2_17_aarch64.whl
+Source10:   https://files.pythonhosted.org/packages/cp39/g/grpcio_tools/grpcio_tools-1.48.2-cp39-cp39-manylinux_2_17_aarch64.whl
+Source11:   https://files.pythonhosted.org/packages/cp39/p/protobuf/protobuf-3.20.0-cp39-cp39-manylinux2014_aarch64.whl
+# other arch grpcio/protobuf sources
+Source12:   %pypi_source grpcio 1.55.3
+Source13:   %pypi_source grpcio-tools 1.48.2
+Source14:   %pypi_source protobuf 3.20.0
 
 Requires: python3.9
 Requires: rhc
@@ -37,12 +47,17 @@ BuildRequires: python3-devel
 BuildRequires: python3.9dist(pip)
 BuildRequires: python3.9dist(wheel)
 BuildRequires: python3.9dist(setuptools)
+BuildRequires: python3.9dist(pexpect)
+BuildRequires: python3.9dist(pyyaml)
+BuildRequires: python3.9dist(six)
+%ifnarch x86_64 aarch64
 BuildRequires: openssl-devel
 BuildRequires: c-ares-devel
 BuildRequires: zlib-devel
 BuildRequires: python3.9dist(cython)
 BuildRequires: gcc
 BuildRequires: gcc-c++
+%endif
 
 ExcludeArch:   i686
 
@@ -68,6 +83,7 @@ find -type f -name '.gitignore' -print -delete
 popd
 
 %build
+%ifnarch x86_64 aarch64
 %define _lto_cflags %{nil}
 %set_build_flags
 export GRPC_PYTHON_BUILD_WITH_CYTHON=True
@@ -75,11 +91,34 @@ export GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=True
 export GRPC_PYTHON_BUILD_SYSTEM_ZLIB=True
 export GRPC_PYTHON_BUILD_SYSTEM_CARES=True
 export GRPC_PYTHON_DISABLE_LIBC_COMPATIBILITY=True
+%endif
 
 # remove and remake the constants file for the correct LIBDIR
 rm -f rhc_worker_playbook/constants.py
 %{__make} LIBDIR=%{_libdir} rhc_worker_playbook/constants.py
-%{python3} -m pip wheel --no-deps --wheel-dir=wheels . %{SOURCE3} %{SOURCE4} %{SOURCE5} %{SOURCE6} %{SOURCE7} %{SOURCE8}
+mkdir wheels
+
+# add ansible-runner and its dependencies
+cp %{SOURCE3} %{SOURCE4} %{SOURCE5} wheels
+
+%ifarch x86_64
+# grpcio, protobuf x86_64
+cp %{SOURCE6} %{SOURCE7} %{SOURCE8} wheels
+%endif
+
+%ifarch aarch64
+# grpcio, protobuf aarch64
+cp %{SOURCE9} %{SOURCE10} %{SOURCE11} wheels
+%endif
+
+%ifnarch x86_64 aarch64
+# build grpcio, protobuf from source
+%{python3} -m pip wheel --no-deps --wheel-dir=wheels . %{SOURCE12} %{SOURCE13} %{SOURCE14}
+%endif
+
+# build rhc-worker-playbook wheel
+%{python3} -m pip wheel --no-deps --wheel-dir=wheels .
+touch wheels
 
 # Building the Ansible Collections
 pushd community.general-%{community_general_version}
@@ -93,7 +132,7 @@ popd
 %install
 %{make_install} PREFIX=%{_prefix} LIBDIR=%{_libdir} DEPENDENCY_WHEELS="wheels/ansible* wheels/grpcio* wheels/protobuf* wheels/python_daemon* wheels/lockfile*" PIP_INSTALL_EXTRA_ARGS="--no-deps"
 # confirm Python dependencies are OK
-PYTHONPATH=%{_libdir} %{python3} -m pip check
+PYTHONPATH=%{buildroot}%{_libdir}/rhc-worker-playbook %{python3} -m pip check
 
 # Installing the Ansible Collections
 mkdir -p %{buildroot}%{_datadir}/rhc-worker-playbook/ansible/collections/ansible_collections/community/general
