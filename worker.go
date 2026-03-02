@@ -96,6 +96,7 @@ func rx(
 	// Create the event manager.
 	eventManager := NewEventManager(id, returnURL, responseInterval, w)
 
+	// TODO [RHINENG-24450]: "data" is no longer the playbook, but a URL. it must be fetched first
 	if config.DefaultConfig.VerifyPlaybook {
 		d, err := verifyPlaybook(data)
 		if err != nil {
@@ -254,6 +255,7 @@ func (e *EventManager) transmitEvents(events []json.RawMessage) error {
 		return fmt.Errorf("cannot build request body: err=%v", err)
 	}
 
+	// TODO [RHINENG-24450]: use internal HTTP client instead of transmitting back to yggdrasil
 	responseCode, responseMetadata, responseBody, err := e.worker.Transmit(
 		e.returnURL,
 		uuid.New().String(),
