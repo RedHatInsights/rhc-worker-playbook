@@ -89,7 +89,7 @@ func mainAction(ctx *cli.Context) error {
 	}
 	log.SetLevel(level)
 
-	w, err := worker.NewWorker(config.DefaultConfig.Directive, true, nil, nil, rx, nil)
+	w, err := worker.NewWorker(config.DefaultConfig.Directive, false, nil, nil, rx, nil)
 	if err != nil {
 		return cli.Exit(fmt.Errorf("cannot create worker: %w", err), 1)
 	}
