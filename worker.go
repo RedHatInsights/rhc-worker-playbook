@@ -8,6 +8,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/textproto"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -16,7 +17,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/redhatinsights/rhc-worker-playbook/internal/ansible"
 	"github.com/redhatinsights/rhc-worker-playbook/internal/config"
+	"github.com/redhatinsights/rhc-worker-playbook/internal/constants"
 	"github.com/redhatinsights/rhc-worker-playbook/internal/exec"
+	"github.com/redhatinsights/rhc-worker-playbook/internal/http"
 	"github.com/redhatinsights/yggdrasil/worker"
 	"github.com/subpop/go-log"
 )
@@ -26,6 +29,7 @@ type EventManager struct {
 	returnURL         string
 	responseInterval  time.Duration
 	worker            *worker.Worker
+	httpClient        *http.Client
 	cachedEvents      []json.RawMessage
 	cachedEventsLock  sync.RWMutex
 	stopSendingEvents chan struct{}
@@ -36,6 +40,7 @@ func NewEventManager(
 	returnURL string,
 	responseInterval time.Duration,
 	worker *worker.Worker,
+	client *http.Client,
 ) *EventManager {
 	return &EventManager{
 		id:                id,
@@ -44,6 +49,7 @@ func NewEventManager(
 		worker:            worker,
 		cachedEvents:      []json.RawMessage{},
 		stopSendingEvents: make(chan struct{}),
+		httpClient:        client,
 	}
 }
 
@@ -56,6 +62,13 @@ func rx(
 	data []byte,
 ) error {
 	log.Infof("message received: message-id=%v", id)
+
+	// Initialize HTTP client
+	tlsConfig, err := http.CreateTLSConfig(config.DefaultConfig)
+	httpClient := http.NewHTTPClient(tlsConfig, "rhc-worker-playbook/"+constants.Version)
+	if err != nil {
+		return err
+	}
 
 	// Get returnURL from message metadata
 	returnURL, has := metadata["return_url"]
@@ -93,12 +106,21 @@ func rx(
 		responseInterval = 500 * time.Millisecond
 	}
 
+	urlString, err := parsePlaybookUrl(data)
+	if err != nil {
+		return err
+	}
+	playbook, err := httpClient.GetPlaybook(urlString)
+	if err != nil {
+		return err
+	}
+
 	// Create the event manager.
-	eventManager := NewEventManager(id, returnURL, responseInterval, w)
+	eventManager := NewEventManager(id, returnURL, responseInterval, w, httpClient)
 
 	// TODO [RHINENG-24450]: "data" is no longer the playbook, but a URL. it must be fetched first
 	if config.DefaultConfig.VerifyPlaybook {
-		d, err := verifyPlaybook(data)
+		verifiedPlaybook, err := verifyPlaybook(playbook)
 		if err != nil {
 			verifyPlaybookError := err
 
@@ -144,7 +166,7 @@ func rx(
 
 			return verifyPlaybookError
 		}
-		data = d
+		playbook = verifiedPlaybook
 	}
 
 	// Create the playbook runner.
@@ -155,7 +177,7 @@ func rx(
 	go eventManager.transmitCachedEvents()
 
 	// Run the playbook.
-	err = runner.Run(data)
+	err = runner.Run(playbook)
 	if err != nil {
 		return fmt.Errorf("cannot run playbook: err=%w", err)
 	}
@@ -255,16 +277,14 @@ func (e *EventManager) transmitEvents(events []json.RawMessage) error {
 		return fmt.Errorf("cannot build request body: err=%v", err)
 	}
 
-	// TODO [RHINENG-24450]: use internal HTTP client instead of transmitting back to yggdrasil
-	responseCode, responseMetadata, responseBody, err := e.worker.Transmit(
+	responseCode, responseMetadata, responseBody, err := e.httpClient.PostResults(
 		e.returnURL,
-		uuid.New().String(),
-		e.id,
 		map[string]string{
 			"Content-Type": outerContentType,
 		},
 		requestBody.Bytes(),
 	)
+
 	if err != nil {
 		return fmt.Errorf("cannot transmit data: err=%v", err)
 	}
@@ -397,4 +417,22 @@ func buildRequestBody(body string, filename string) (*bytes.Buffer, string, erro
 	outerContentType := fmt.Sprintf("multipart/form-data; boundary=%s", writer.Boundary())
 
 	return requestBody, outerContentType, nil
+}
+
+// parsePlaybookUrl parses the incoming bytestring as a URL, validates it, sets the data host, and returns a string
+func parsePlaybookUrl(data []byte) (string, error) {
+	var urlStr string
+	err := json.Unmarshal(data, &urlStr)
+	if err != nil {
+		return "", fmt.Errorf("unable to unmarshal JSON string fragment: %v", err)
+	}
+	// When string fragment was unmarshalled, then we can try to parse string as URL
+	URL, err := url.Parse(urlStr)
+	if err != nil {
+		return "", fmt.Errorf("cannot parse content %v as URL: %v", urlStr, err)
+	}
+	if config.DefaultConfig.DataHost != "" {
+		URL.Host = config.DefaultConfig.DataHost
+	}
+	return URL.String(), nil
 }

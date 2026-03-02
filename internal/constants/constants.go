@@ -26,6 +26,10 @@ var (
 
 	// CacheDir is a path to a location where cache data can be stored.
 	CacheDir string
+
+	// DefaultDataHost is the default value used to force sending all HTTP
+	// traffic to a specific host.
+	DefaultDataHost string
 )
 
 func init() {
@@ -59,5 +63,9 @@ func init() {
 
 	if CacheDir == "" {
 		CacheDir = filepath.Join(LocalStateDir, "cache", "rhc-worker-playbook")
+	}
+
+	if DefaultDataHost == "" {
+		DefaultDataHost = "cert.cloud.redhat.com"
 	}
 }

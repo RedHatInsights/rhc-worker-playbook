@@ -32,29 +32,51 @@ func main() {
 		},
 		altsrc.NewStringFlag(&cli.StringFlag{
 			Name:  config.FlagNameDirective,
-			Value: config.DefaultConfig.Directive,
 			Usage: "set directive to `DIRECTIVE`",
 		}),
 		altsrc.NewStringFlag(&cli.StringFlag{
 			Name:  config.FlagNameLogLevel,
-			Value: config.DefaultConfig.LogLevel,
 			Usage: "set log level to `LEVEL`",
 		}),
 		altsrc.NewBoolFlag(&cli.BoolFlag{
 			Name:  config.FlagNameVerifyPlaybook,
-			Value: config.DefaultConfig.VerifyPlaybook,
 			Usage: "use GPG signature verification before executing a playbook",
 		}),
 		altsrc.NewDurationFlag(&cli.DurationFlag{
 			Name:   config.FlagNameResponseInterval,
-			Value:  config.DefaultConfig.ResponseInterval,
 			Usage:  "override per-message response interval value",
 			Hidden: true,
 		}),
 		altsrc.NewIntFlag(&cli.IntFlag{
 			Name:   config.FlagNameBatchEvents,
-			Value:  config.DefaultConfig.BatchEvents,
 			Usage:  "number of events to batch together in a single transmision",
+			Hidden: true,
+		}),
+		altsrc.NewStringFlag(&cli.StringFlag{
+			Name:  config.FlagNameCertFile,
+			Usage: "Use `FILE` as the client certificate",
+		}),
+		altsrc.NewStringFlag(&cli.StringFlag{
+			Name:  config.FlagNameKeyFile,
+			Usage: "Use `FILE` as the client's private key",
+		}),
+		altsrc.NewStringSliceFlag(&cli.StringSliceFlag{
+			Name:   config.FlagNameCaRoot,
+			Hidden: true,
+			Usage:  "Use `FILE` as the root CA",
+		}),
+		altsrc.NewStringFlag(&cli.StringFlag{
+			Name:  config.FlagNameDataHost,
+			Usage: "Force all HTTP traffic over `HOST`",
+		}),
+		altsrc.NewIntFlag(&cli.IntFlag{
+			Name:   config.FlagNameHTTPRetries,
+			Usage:  "Retry HTTP requests `N` times",
+			Hidden: true,
+		}),
+		altsrc.NewDurationFlag(&cli.DurationFlag{
+			Name:   config.FlagNameHTTPTimeout,
+			Usage:  "Wait for `DURATION` before cancelling an HTTP request",
 			Hidden: true,
 		}),
 	}
@@ -114,4 +136,9 @@ func loadConfigFromContext(ctx *cli.Context) {
 	config.DefaultConfig.VerifyPlaybook = ctx.Bool(config.FlagNameVerifyPlaybook)
 	config.DefaultConfig.ResponseInterval = ctx.Duration(config.FlagNameResponseInterval)
 	config.DefaultConfig.BatchEvents = ctx.Int(config.FlagNameBatchEvents)
+	config.DefaultConfig.CertFile = ctx.String(config.FlagNameCertFile)
+	config.DefaultConfig.KeyFile = ctx.String(config.FlagNameKeyFile)
+	config.DefaultConfig.DataHost = ctx.String(config.FlagNameDataHost)
+	config.DefaultConfig.HTTPRetries = ctx.Int(config.FlagNameHTTPRetries)
+	config.DefaultConfig.HTTPTimeout = ctx.Duration(config.FlagNameHTTPTimeout)
 }
