@@ -138,6 +138,11 @@ def rhc_worker_playbook_config_for_worker_test(enable_verify_playbook):
     config = toml.load(config_path)
     config["verify-playbook"] = enable_verify_playbook
     config["log-level"] = "trace"
+    
+    config["data-host"] = "localhost:8000"
+    config["cert-file"] = ""
+    config["key-file"] = ""    
+    
     with open(config_path, "w") as configfile:
         toml.dump(config, configfile)
 
