@@ -8,6 +8,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/textproto"
+	"os/exec"
 	"strings"
 	"sync"
 	"time"
@@ -16,7 +17,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/redhatinsights/rhc-worker-playbook/internal/ansible"
 	"github.com/redhatinsights/rhc-worker-playbook/internal/config"
-	"github.com/redhatinsights/rhc-worker-playbook/internal/exec"
 	"github.com/redhatinsights/yggdrasil/worker"
 	"github.com/subpop/go-log"
 )
@@ -291,19 +291,28 @@ func (e *EventManager) transmitEvents(events []json.RawMessage) error {
 // standard input. If the playbook passes verification, the playbook, stripped
 // of "insights_signature" variables is returned.
 func verifyPlaybook(data []byte) ([]byte, error) {
-	env := []string{
-		"PATH=/sbin:/bin:/usr/sbin:/usr/bin",
-	}
-
-	args := []string{"--stdin"}
 
 	stdin := bytes.NewReader(data)
-	stdout, stderr, code, err := exec.RunProcess(
+	stdoutb := new(bytes.Buffer)
+	stderrb := new(bytes.Buffer)
+
+	rhcPlaybookVerifierCmd := exec.Command(
 		"/usr/libexec/rhc-playbook-verifier",
-		args,
-		env,
-		stdin,
+		"--stdin",
 	)
+	rhcPlaybookVerifierCmd.Env = []string{
+		"PATH=/sbin:/bin:/usr/sbin:/usr/bin",
+	}
+	rhcPlaybookVerifierCmd.Stdin = stdin
+	rhcPlaybookVerifierCmd.Stdout = stdoutb
+	rhcPlaybookVerifierCmd.Stderr = stderrb
+
+	err := rhcPlaybookVerifierCmd.Run()
+
+	code := rhcPlaybookVerifierCmd.ProcessState.ExitCode()
+	stdout := stdoutb.Bytes()
+	stderr := stderrb.Bytes()
+
 	if err != nil {
 		verifyPlaybookError := fmt.Errorf(
 			"cannot verify playbook: code=%v stdout=%v stderr=%v",

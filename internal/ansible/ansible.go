@@ -4,15 +4,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/redhatinsights/rhc-worker-playbook/internal/constants"
-	"github.com/redhatinsights/rhc-worker-playbook/internal/exec"
 	"github.com/rjeczalik/notify"
 	"github.com/subpop/go-log"
 )
@@ -123,39 +122,40 @@ func (r *Runner) Run(playbook []byte) error {
 	// created automatically by ansible_runner
 	ansibleRemoteTmpPath := filepath.Join(ansibleHomePath, "remote-tmp")
 
-	err = exec.StartProcess(
+	ansibleRunnerCmd := exec.Command(
 		"/usr/bin/python3",
-		[]string{
-			"-m",
-			"ansible_runner",
-			"start",
-			"--ident",
-			r.ID,
-			"--playbook",
-			playbookPath,
-			r.privateDataDir,
-		},
-		[]string{
-			"PATH=/sbin:/bin:/usr/sbin:/usr/bin",
-			"PYTHONPATH=" + filepath.Join(constants.LibDir, "rhc-worker-playbook"),
-			"PYTHONDONTWRITEBYTECODE=1",
-			"ANSIBLE_HOME=" + ansibleHomePath,
-			"ANSIBLE_REMOTE_TMP=" + ansibleRemoteTmpPath,
-			"ANSIBLE_COLLECTIONS_PATH=" + filepath.Join(
-				constants.DataDir,
-				"rhc-worker-playbook",
-				"ansible",
-				"collections",
-				"ansible_collections",
-			),
-		},
-		func(pid int, stdout, stderr io.ReadCloser) {
-			log.Infof("run started: pid=%v", pid)
-		},
+		"-m",
+		"ansible_runner",
+		"start",
+		"--ident",
+		r.ID,
+		"--playbook",
+		playbookPath,
+		r.privateDataDir,
 	)
+	ansibleRunnerCmd.Env = []string{
+		"PATH=/sbin:/bin:/usr/sbin:/usr/bin",
+		"PYTHONPATH=" + filepath.Join(constants.LibDir, "rhc-worker-playbook"),
+		"PYTHONDONTWRITEBYTECODE=1",
+		"ANSIBLE_HOME=" + ansibleHomePath,
+		"ANSIBLE_REMOTE_TMP=" + ansibleRemoteTmpPath,
+		"ANSIBLE_COLLECTIONS_PATH=" + filepath.Join(
+			constants.DataDir,
+			"rhc-worker-playbook",
+			"ansible",
+			"collections",
+			"ansible_collections",
+		),
+	}
 
-	if err != nil {
-		return fmt.Errorf("cannot start process: err=%w", err)
+	if err := ansibleRunnerCmd.Start(); err != nil {
+		return fmt.Errorf("cannot start ansible-runner: err=%w", err)
+	}
+
+	log.Infof("run started: pid=%v", ansibleRunnerCmd.Process.Pid)
+
+	if err := ansibleRunnerCmd.Wait(); err != nil {
+		return fmt.Errorf("error executing ansible-runner: err=%w", err)
 	}
 
 	return nil
