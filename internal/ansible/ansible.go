@@ -30,10 +30,12 @@ type Runner struct {
 	// not completed.
 	Status string
 
-	privateDataDir      string
-	stopJobEventsWatch  chan struct{}
-	stopStatusFileWatch chan struct{}
-	timeout             time.Duration
+	privateDataDir     string
+	stopJobEventsWatch chan struct{}
+
+	// TODO: figure out what to do with this (delete or repurpose)
+	// 	now that we no longer "watch" the status file
+	timeout time.Duration
 }
 
 // createUuidFunc is a function that returns a UUID, typically uuid.New(),
@@ -43,20 +45,21 @@ type createUuidFunc func() uuid.UUID
 // NewRunner creates a new Runner, uniquely identified by ID.
 func NewRunner(ID string, timeout time.Duration) *Runner {
 	return &Runner{
-		Events:              make(chan json.RawMessage),
-		privateDataDir:      filepath.Join(constants.StateDir, "runs"),
-		ID:                  ID,
-		stopJobEventsWatch:  make(chan struct{}),
-		stopStatusFileWatch: make(chan struct{}),
-		timeout:             timeout,
+		Events:             make(chan json.RawMessage),
+		privateDataDir:     filepath.Join(constants.StateDir, "runs"),
+		ID:                 ID,
+		stopJobEventsWatch: make(chan struct{}),
+		timeout:            timeout,
 	}
 }
 
 // Run begins running the provided playbook, using the given ID as the run
-// identity. It returns immediately after starting the ansible_runner process.
+// identity. It returns after ansible-runner completes the playbook run.
 // Events will be sent to the runner's Events channel. When the channel closes,
 // the run is complete.
 func (r *Runner) Run(playbook []byte) error {
+	defer r.end()
+
 	// write playbook to the filesystem
 	playbookPath := filepath.Join(constants.StateDir, r.ID+".yaml")
 	if err := os.WriteFile(playbookPath, playbook, 0600); err != nil {
@@ -74,45 +77,25 @@ func (r *Runner) Run(playbook []byte) error {
 		)
 	}
 
-	// precreate the status file so that we can watch for when it gets written
-	// to.
-	statusFilePath := filepath.Join(r.privateDataDir, "artifacts", r.ID, "status")
-	status, err := os.Create(statusFilePath)
-	if err != nil {
-		return fmt.Errorf("cannot create status file: file=%v err=%w", statusFilePath, err)
-	}
-	_ = status.Close()
-
 	// start a goroutine to watch for event files being written to the
 	// job_events directory. When a relevant event file is detected, it gets
 	// marshaled into JSON and sent to the events channel.
 	go r.watch(jobEventsPath, r.handleJobEvent, r.stopJobEventsWatch, nil, notify.InMovedTo)
 
-	// start a goroutine that watches for the "status" file. When it gets
-	// written to, its contents are read, and if the status is "failed", a final
-	// "failed" event is written to the events channel. No action is taken if
-	// the status is "successful".
-	go r.watch(
-		statusFilePath,
-		r.handleStatusFileEvent,
-		r.stopStatusFileWatch,
-		time.After(r.timeout),
-		notify.InCloseWrite,
-	)
-
 	// publish an "executor_on_start" event to signal cloud connector that a run
 	// event has started. This is run on a goroutine in case the events
 	// channel doesn't have a receiver connected yet to avoid blocking the
 	// continuation of this function.
-	go func() {
-		event := GenerateExecutorOnStartEvent(r.ID, uuid.New)
-		data, err := json.Marshal(event)
-		if err != nil {
-			log.Errorf("cannot marshal json: err=%v", err)
-			return
-		}
-		r.Events <- data
-	}()
+	// --
+	// @TODO (RHINENG-25480): move this out of the Run function and into worker.go --
+	// 	this should happen before anything else so we can log any errors back to remediations
+	event := GenerateExecutorOnStartEvent(r.ID, uuid.New)
+	data, err := json.Marshal(event)
+	if err != nil {
+		return fmt.Errorf("cannot marshal json: err=%v", err)
+	}
+	r.Events <- data
+	// --
 
 	// typically /var/lib/rhc-worker-playbook/ansible-home
 	// created automatically by ansible_runner
@@ -126,7 +109,7 @@ func (r *Runner) Run(playbook []byte) error {
 		"/usr/bin/python3",
 		"-m",
 		"ansible_runner",
-		"start",
+		"run",
 		"--ident",
 		r.ID,
 		"--playbook",
@@ -157,6 +140,8 @@ func (r *Runner) Run(playbook []byte) error {
 	if err := ansibleRunnerCmd.Wait(); err != nil {
 		return fmt.Errorf("error executing ansible-runner: err=%w", err)
 	}
+
+	r.processStatus()
 
 	return nil
 }
@@ -231,12 +216,11 @@ func (r *Runner) handleJobEvent(event notify.EventInfo) {
 	}
 }
 
-// handleStatusFileEvent is the handler function invoked when the status file is
+// processStatus is the handler function invoked when the status file is
 // written to.
-func (r *Runner) handleStatusFileEvent(event notify.EventInfo) {
-	// TODO [RHINENG-22379]: what happens to the playbook process when the status file is unreadable?
-	//	and/or what happens when this function returns without closing the channels?
-	data, err := os.ReadFile(event.Path())
+func (r *Runner) processStatus() {
+	statusFilePath := filepath.Join(r.privateDataDir, "artifacts", r.ID, "status")
+	data, err := os.ReadFile(statusFilePath)
 	if err != nil {
 		log.Errorf("failed to read status file: err=%v", err)
 		return
@@ -261,8 +245,6 @@ func (r *Runner) handleStatusFileEvent(event notify.EventInfo) {
 	}
 
 	r.Status = status
-
-	r.end()
 }
 
 // end monitoring playbook event output
@@ -275,7 +257,6 @@ func (r *Runner) end() {
 	// the watch is removed.
 	go func() {
 		r.stopJobEventsWatch <- struct{}{}
-		r.stopStatusFileWatch <- struct{}{}
 	}()
 }
 
