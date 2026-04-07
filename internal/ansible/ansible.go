@@ -8,7 +8,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/redhatinsights/rhc-worker-playbook/internal/constants"
@@ -30,12 +29,11 @@ type Runner struct {
 	// not completed.
 	Status string
 
-	privateDataDir     string
-	stopJobEventsWatch chan struct{}
+	playbookPath   string
+	jobEventsPath  string
+	statusFilePath string
 
-	// TODO: figure out what to do with this (delete or repurpose)
-	// 	now that we no longer "watch" the status file
-	timeout time.Duration
+	stopJobEventsWatch chan struct{}
 }
 
 // createUuidFunc is a function that returns a UUID, typically uuid.New(),
@@ -43,13 +41,14 @@ type Runner struct {
 type createUuidFunc func() uuid.UUID
 
 // NewRunner creates a new Runner, uniquely identified by ID.
-func NewRunner(ID string, timeout time.Duration) *Runner {
+func NewRunner(ID string) *Runner {
 	return &Runner{
 		Events:             make(chan json.RawMessage),
-		privateDataDir:     filepath.Join(constants.StateDir, "runs"),
 		ID:                 ID,
+		playbookPath:       filepath.Join(constants.StateDir, ID+".yaml"),
+		jobEventsPath:      filepath.Join(constants.PrivateDataDir, "artifacts", ID, "job_events"),
+		statusFilePath:     filepath.Join(constants.PrivateDataDir, "artifacts", ID, "status"),
 		stopJobEventsWatch: make(chan struct{}),
-		timeout:            timeout,
 	}
 }
 
@@ -61,18 +60,16 @@ func (r *Runner) Run(playbook []byte) error {
 	defer r.end()
 
 	// write playbook to the filesystem
-	playbookPath := filepath.Join(constants.StateDir, r.ID+".yaml")
-	if err := os.WriteFile(playbookPath, playbook, 0600); err != nil {
-		return fmt.Errorf("cannot write playbook file: path=%v err=%w", playbookPath, err)
+	if err := os.WriteFile(r.playbookPath, playbook, 0600); err != nil {
+		return fmt.Errorf("cannot write playbook file: path=%v err=%w", r.playbookPath, err)
 	}
 
 	// precreate the job_events directory so that we can watch for when events
 	// get written to it.
-	jobEventsPath := filepath.Join(r.privateDataDir, "artifacts", r.ID, "job_events")
-	if err := os.MkdirAll(jobEventsPath, 0755); err != nil {
+	if err := os.MkdirAll(r.jobEventsPath, 0755); err != nil {
 		return fmt.Errorf(
 			"cannot create job_events directory: directory=%v err=%w",
-			jobEventsPath,
+			r.jobEventsPath,
 			err,
 		)
 	}
@@ -80,7 +77,7 @@ func (r *Runner) Run(playbook []byte) error {
 	// start a goroutine to watch for event files being written to the
 	// job_events directory. When a relevant event file is detected, it gets
 	// marshaled into JSON and sent to the events channel.
-	go r.watch(jobEventsPath, r.handleJobEvent, r.stopJobEventsWatch, nil, notify.InMovedTo)
+	go r.watchJobEvents()
 
 	// publish an "executor_on_start" event to signal cloud connector that a run
 	// event has started. This is run on a goroutine in case the events
@@ -97,14 +94,6 @@ func (r *Runner) Run(playbook []byte) error {
 	r.Events <- data
 	// --
 
-	// typically /var/lib/rhc-worker-playbook/ansible-home
-	// created automatically by ansible_runner
-	ansibleHomePath := filepath.Join(constants.StateDir, "ansible-home")
-
-	// typically /var/lib/rhc-worker-playbook/ansible-home/remote-tmp
-	// created automatically by ansible_runner
-	ansibleRemoteTmpPath := filepath.Join(ansibleHomePath, "remote-tmp")
-
 	ansibleRunnerCmd := exec.Command(
 		"/usr/bin/python3",
 		"-m",
@@ -113,15 +102,15 @@ func (r *Runner) Run(playbook []byte) error {
 		"--ident",
 		r.ID,
 		"--playbook",
-		playbookPath,
-		r.privateDataDir,
+		r.playbookPath,
+		constants.PrivateDataDir,
 	)
 	ansibleRunnerCmd.Env = []string{
 		"PATH=/sbin:/bin:/usr/sbin:/usr/bin",
 		"PYTHONPATH=" + filepath.Join(constants.LibDir, "rhc-worker-playbook"),
 		"PYTHONDONTWRITEBYTECODE=1",
-		"ANSIBLE_HOME=" + ansibleHomePath,
-		"ANSIBLE_REMOTE_TMP=" + ansibleRemoteTmpPath,
+		"ANSIBLE_HOME=" + constants.AnsibleHomePath,
+		"ANSIBLE_REMOTE_TMP=" + constants.AnsibleRemoteTmpPath,
 		"ANSIBLE_COLLECTIONS_PATH=" + filepath.Join(
 			constants.DataDir,
 			"rhc-worker-playbook",
@@ -162,7 +151,7 @@ func (r *Runner) handleJobEvent(event notify.EventInfo) {
 		// ansible-running ansibleEvent JSON that are not explicitly named in a
 		// struct. This allows the fields that are immaterial to the worker to
 		// still be included in the data structure.
-		var ansibleEvent map[string]interface{}
+		var ansibleEvent map[string]any
 		if err := json.Unmarshal(data, &ansibleEvent); err != nil {
 			log.Errorf("cannot unmarshal data: data=%v error=%v", data, err)
 			return
@@ -173,12 +162,12 @@ func (r *Runner) handleJobEvent(event notify.EventInfo) {
 
 		eventData, ok := ansibleEvent["event_data"]
 		if !ok {
-			eventData = map[string]interface{}{}
+			eventData = map[string]any{}
 		}
-		if _, has := eventData.(map[string]interface{})["crc_dispatcher_correlation_id"]; !has {
-			eventData.(map[string]interface{})["crc_dispatcher_correlation_id"] = r.ID
+		if _, has := eventData.(map[string]any)["crc_dispatcher_correlation_id"]; !has {
+			eventData.(map[string]any)["crc_dispatcher_correlation_id"] = r.ID
 		}
-		eventData.(map[string]interface{})["crc_message_version"] = 1
+		eventData.(map[string]any)["crc_message_version"] = 1
 		ansibleEvent["event_data"] = eventData
 
 		// "counter" is a required field according to playbook-dispatcher's
@@ -216,11 +205,9 @@ func (r *Runner) handleJobEvent(event notify.EventInfo) {
 	}
 }
 
-// processStatus is the handler function invoked when the status file is
-// written to.
+// processStatus reads the status file generated by ansible-runner
 func (r *Runner) processStatus() {
-	statusFilePath := filepath.Join(r.privateDataDir, "artifacts", r.ID, "status")
-	data, err := os.ReadFile(statusFilePath)
+	data, err := os.ReadFile(r.statusFilePath)
 	if err != nil {
 		log.Errorf("failed to read status file: err=%v", err)
 		return
@@ -247,51 +234,34 @@ func (r *Runner) processStatus() {
 	r.Status = status
 }
 
-// end monitoring playbook event output
+// end signals watchJobEvents to stop watching the job_events path and closes the Events channel
 func (r *Runner) end() {
-	// Close the events channel, signalling to callers that the job is complete.
+	close(r.stopJobEventsWatch)
 	close(r.Events)
-
-	// Signal the watch routines to stop and clean up. This is done on a
-	// goroutine to allow the executing handlers an opportunity to finish before
-	// the watch is removed.
-	go func() {
-		r.stopJobEventsWatch <- struct{}{}
-	}()
 }
 
-// watch will set up a watch on the file or directory specified by path. Each
-// time an event occurs, the handler function is invoked on the event. To stop
-// the watch routine, send a value on the stop channel.
-func (r *Runner) watch(
-	path string,
-	handler func(event notify.EventInfo),
-	stop chan struct{},
-	timeout <-chan time.Time,
-	events ...notify.Event,
-) {
+// watchJobEvents will set up a watch on r.jobEventsPath.
+// Each time an event occurs, the handler function is invoked on the event.
+// To stop the watch routine, send a value on the stop channel.
+func (r *Runner) watchJobEvents() {
 	watchedEvents := make(chan notify.EventInfo, 1)
 	defer close(watchedEvents)
 
-	if err := notify.Watch(path, watchedEvents, events...); err != nil {
-		log.Errorf("cannot watch path for events: path=%v err=%v", path, err)
+	if err := notify.Watch(r.jobEventsPath, watchedEvents, notify.InMovedTo); err != nil {
+		log.Errorf("cannot watch path for events: path=%v err=%v", r.jobEventsPath, err)
 		return
 	}
 	defer notify.Stop(watchedEvents)
 
-	log.Tracef("start watching for events: path=%v events=%v", path, events)
-	defer log.Tracef("stop watching for events: path=%v", path)
+	log.Tracef("start watching for job events: path=%v", r.jobEventsPath)
+	defer log.Tracef("stop watching for job events: path=%v", r.jobEventsPath)
+
 	for {
 		select {
-		case <-timeout:
-			log.Infof("timeout elapsed watching for events: path=%v", path)
-			// since the status file handler is not invoked, clean up channels here, otherwise it will upload forever
-			r.end()
-			return
-		case <-stop:
+		case <-r.stopJobEventsWatch:
 			return
 		case event := <-watchedEvents:
-			handler(event)
+			r.handleJobEvent(event)
 		}
 	}
 }

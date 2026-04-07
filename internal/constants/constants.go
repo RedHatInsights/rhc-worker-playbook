@@ -26,6 +26,15 @@ var (
 
 	// CacheDir is a path to a location where cache data can be stored.
 	CacheDir string
+
+	// PrivateDataDir is the location of the ansible-runner runs
+	PrivateDataDir string
+
+	// AnsibleHomePath is a directory used by ansible-runner
+	AnsibleHomePath string
+
+	// AnsibleRemoteTmpPath is a directory used by ansible-runner
+	AnsibleRemoteTmpPath string
 )
 
 func init() {
@@ -59,5 +68,17 @@ func init() {
 
 	if CacheDir == "" {
 		CacheDir = filepath.Join(LocalStateDir, "cache", "rhc-worker-playbook")
+	}
+
+	if PrivateDataDir == "" {
+		PrivateDataDir = filepath.Join(StateDir, "runs")
+	}
+
+	if AnsibleHomePath == "" {
+		AnsibleHomePath = filepath.Join(StateDir, "ansible-home")
+	}
+
+	if AnsibleRemoteTmpPath == "" {
+		AnsibleRemoteTmpPath = filepath.Join(AnsibleHomePath, "remote-tmp")
 	}
 }
