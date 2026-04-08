@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/goccy/go-yaml"
-	"github.com/google/uuid"
 	"github.com/redhatinsights/rhc-worker-playbook/internal/ansible"
 	"github.com/redhatinsights/rhc-worker-playbook/internal/config"
 	"github.com/redhatinsights/yggdrasil/worker"
@@ -26,6 +25,7 @@ func rx(
 	data []byte,
 ) error {
 	log.Infof("message received: message-id=%v", id)
+	defer log.Infof("message finished: message-id=%v", id)
 
 	// Get returnURL from message metadata
 	returnURL, has := metadata["return_url"]
@@ -34,7 +34,7 @@ func rx(
 	}
 
 	// Get correlationID from metadata
-	correlationID, has := metadata["crc_dispatcher_correlation_id"]
+	correlationId, has := metadata["crc_dispatcher_correlation_id"]
 	if !has {
 		return fmt.Errorf("invalid metadata: missing crc_dispatcher_correlation_id")
 	}
@@ -63,69 +63,77 @@ func rx(
 		responseInterval = 500 * time.Millisecond
 	}
 
-	// Create the event manager.
-	eventManager := ansible.NewEventManager(id, returnURL, responseInterval, w)
+	// events is a channel for communication between the Runner and EventManager goroutines
+	// Runner sends job events, and EventManager receives them
+	events := make(chan json.RawMessage)
 
+	// stopTransmittingEvents is a channel to signal to TransmitCachedEvents to finish
+	stopTransmittingEvents := make(chan struct{})
+	eventManager := ansible.NewEventManager(
+		id,
+		correlationId,
+		returnURL,
+		responseInterval,
+		w,
+		events,
+		stopTransmittingEvents,
+	)
+
+	// Start the goroutine processing events from the runner
+	processEventsDone := make(chan struct{})
+	go eventManager.ProcessEvents(processEventsDone)
+
+	// Start the goroutine to transmit the set of cached events back to yggdrasil
+	transmitCachedEventsDone := make(chan struct{})
+	go eventManager.TransmitCachedEvents(transmitCachedEventsDone)
+
+	// Channel and goroutine teardown
+	defer func() {
+		// Close the events channel, wait processEvents to do any final writes
+		close(events)
+		<-processEventsDone
+
+		// End transmitCachedEvents, wait for the last transmit
+		close(stopTransmittingEvents)
+		<-transmitCachedEventsDone
+	}()
+
+	// Publish an "executor_on_start" event to signal cloud connector that a run
+	// event has started
+	if err := eventManager.SendExecutorOnStartEvent(); err != nil {
+		return err
+	}
+
+	// Verify the playbook
 	if config.DefaultConfig.VerifyPlaybook {
-		d, err := verifyPlaybook(data)
+		data, err = verifyPlaybook(data)
 		if err != nil {
 			verifyPlaybookError := err
 
-			// If playbook verification fails, send the error back to insights
-			// An executor_on_start event is needed since this is prior to Runner initialization
-			startEvent := ansible.GenerateExecutorOnStartEvent(correlationID, uuid.New)
-			failureEvent := ansible.GenerateExecutorOnFailedEvent(
-				correlationID,
+			if err := eventManager.SendExecutorOnFailedEvent(
 				"ANSIBLE_PLAYBOOK_SIGNATURE_VALIDATION_FAILED",
 				verifyPlaybookError,
-				uuid.New,
-			)
-
-			startEventJsonString, err := json.Marshal(startEvent)
-			// combine errors and return if JSON serialization fails
-			if err != nil {
-				return errors.Join(
-					verifyPlaybookError,
-					fmt.Errorf("cannot marshal JSON: err=%w", err),
-				)
-			}
-
-			failureEventJsonString, err := json.Marshal(failureEvent)
-			// combine errors and return if JSON serialization fails
-			if err != nil {
-				return errors.Join(
-					verifyPlaybookError,
-					fmt.Errorf("cannot marshal JSON: err=%w", err),
-				)
-			}
-
-			if err := eventManager.TransmitEvents(
-				[]json.RawMessage{
-					json.RawMessage(startEventJsonString),
-					json.RawMessage(failureEventJsonString),
-				}); err != nil {
-				// combine errors and return if transmit fails
-				return errors.Join(
-					verifyPlaybookError,
-					fmt.Errorf("cannot transmit events: err=%w", err),
-				)
+			); err != nil {
+				return errors.Join(verifyPlaybookError, err)
 			}
 
 			return verifyPlaybookError
 		}
-		data = d
 	}
+	// Create the playbook runner and run the playbook
+	err = ansible.NewRunner(correlationId, events).Run(data)
 
-	// Create the playbook runner.
-	runner := ansible.NewRunner(correlationID)
-
-	// Start the goroutine processing events from the runner.
-	go eventManager.ProcessEvents(runner)
-
-	// Run the playbook.
-	err = runner.Run(data)
 	if err != nil {
-		return fmt.Errorf("cannot run playbook: err=%w", err)
+		playbookRunError := fmt.Errorf("cannot run playbook: err=%w", err)
+
+		if err := eventManager.SendExecutorOnFailedEvent(
+			"UNDEFINED_ERROR",
+			playbookRunError,
+		); err != nil {
+			return errors.Join(playbookRunError, err)
+		}
+
+		return playbookRunError
 	}
 
 	return nil
