@@ -121,7 +121,7 @@ func TestGenerateExecutorOnFailedEvent(t *testing.T) {
 			"crc_dispatcher_error_details":  "playbook run failed",
 		},
 	}
-	receivedFailureEvent := GenerateExecutorOnFailedEvent(
+	receivedFailureEvent := generateExecutorOnFailedEvent(
 		"dcdc7b28-6800-4af9-983a-60fda58a7156",
 		"TEST_ERROR",
 		errors.New("playbook run failed"),
@@ -150,7 +150,7 @@ func TestGenerateExecutorOnStartEvent(t *testing.T) {
 			"crc_dispatcher_correlation_id": "dcdc7b28-6800-4af9-983a-60fda58a7156",
 		},
 	}
-	receivedStartEvent := GenerateExecutorOnStartEvent(
+	receivedStartEvent := generateExecutorOnStartEvent(
 		"dcdc7b28-6800-4af9-983a-60fda58a7156",
 		mockUuid,
 	)

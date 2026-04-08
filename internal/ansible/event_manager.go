@@ -17,61 +17,66 @@ import (
 	"github.com/subpop/go-log"
 )
 
+// createUuidFunc is a function that returns a UUID, typically uuid.New(),
+// used as a function parameter to decouple uuid generation from function logic
+type createUuidFunc func() uuid.UUID
+
 type EventManager struct {
-	id                string
-	returnURL         string
-	responseInterval  time.Duration
-	worker            *worker.Worker
-	cachedEvents      []json.RawMessage
-	cachedEventsLock  sync.RWMutex
-	stopSendingEvents chan struct{}
+	messageId              string
+	correlationId          string
+	returnURL              string
+	responseInterval       time.Duration
+	worker                 *worker.Worker
+	cachedEvents           []json.RawMessage
+	cachedEventsLock       sync.RWMutex
+	stopTransmittingEvents chan struct{}
+	events                 chan json.RawMessage
 }
 
 func NewEventManager(
-	id string,
+	messageId string,
+	correlationId,
 	returnURL string,
 	responseInterval time.Duration,
 	worker *worker.Worker,
+	events chan json.RawMessage,
+	stopTransmittingEvents chan struct{},
 ) *EventManager {
 	return &EventManager{
-		id:                id,
-		returnURL:         returnURL,
-		responseInterval:  responseInterval,
-		worker:            worker,
-		cachedEvents:      []json.RawMessage{},
-		stopSendingEvents: make(chan struct{}),
+		messageId:              messageId,
+		correlationId:          correlationId,
+		returnURL:              returnURL,
+		responseInterval:       responseInterval,
+		worker:                 worker,
+		cachedEvents:           []json.RawMessage{},
+		stopTransmittingEvents: stopTransmittingEvents,
+		events:                 events,
 	}
 }
 
-// ProcessEvents receives values from the runner and caches them for future use.
-func (e *EventManager) ProcessEvents(runner *Runner) {
-	go e.transmitCachedEvents()
-
-	for event := range runner.Events {
+// processEvents receives values from the runner and caches them for future use.
+func (e *EventManager) ProcessEvents(done chan struct{}) {
+	defer close(done)
+	for event := range e.events {
 		e.cachedEventsLock.Lock()
 		e.cachedEvents = append(e.cachedEvents, event)
 		e.cachedEventsLock.Unlock()
 	}
-
-	// Signal the sending events goroutine to stop.
-	e.stopSendingEvents <- struct{}{}
-
-	// Transmit one final batch of all events.
-	if err := e.TransmitEvents(e.cachedEvents); err != nil {
-		log.Errorf("cannot transmit events: err=%v", err)
-	}
-
-	log.Infof("message finished: message-id=%v", e.id)
 }
 
-// TransmitCachedEvents periodically transmits a batch of cached events when the
+// transmitCachedEvents periodically transmits a batch of cached events when the
 // response interval timeout elapses.
-func (e *EventManager) transmitCachedEvents() {
+func (e *EventManager) TransmitCachedEvents(done chan struct{}) {
+	defer close(done)
 	timeout := time.Tick(e.responseInterval)
 	batchStart := 0
 	for {
 		select {
-		case <-e.stopSendingEvents:
+		case <-e.stopTransmittingEvents:
+			// Transmit one final batch of all events.
+			if err := e.transmitEvents(e.cachedEvents); err != nil {
+				log.Errorf("cannot transmit events: err=%v", err)
+			}
 			return
 		case <-timeout:
 			var batchEnd int
@@ -106,7 +111,7 @@ func (e *EventManager) transmitCachedEvents() {
 				batchStart,
 				batchEnd,
 			)
-			if err := e.TransmitEvents(cachedEvents); err != nil {
+			if err := e.transmitEvents(cachedEvents); err != nil {
 				log.Errorf("cannot transmit events: err=%v", err)
 				continue
 			}
@@ -116,10 +121,10 @@ func (e *EventManager) transmitCachedEvents() {
 	}
 }
 
-// TransmitEvents sends a slice of json.RawMessage values as an HTTP multipart
+// transmitEvents sends a slice of json.RawMessage values as an HTTP multipart
 // request body and sends it via a D-Bus
 // com.redhat.Yggdrasil1.Dispatcher1.Transmit method call.
-func (e *EventManager) TransmitEvents(events []json.RawMessage) error {
+func (e *EventManager) transmitEvents(events []json.RawMessage) error {
 	// Build a JSONL data buffer.
 	body := strings.Builder{}
 	for _, event := range events {
@@ -140,7 +145,7 @@ func (e *EventManager) TransmitEvents(events []json.RawMessage) error {
 	responseCode, responseMetadata, responseBody, err := e.worker.Transmit(
 		e.returnURL,
 		uuid.New().String(),
-		e.id,
+		e.messageId,
 		map[string]string{
 			"Content-Type": outerContentType,
 		},
@@ -167,6 +172,73 @@ func (e *EventManager) TransmitEvents(events []json.RawMessage) error {
 	}
 
 	return nil
+}
+
+// sendExecutorOnStartEvent generates an executor_on_start event and sends it on the Events channel
+func (e *EventManager) SendExecutorOnStartEvent() error {
+	event := generateExecutorOnStartEvent(e.correlationId, uuid.New)
+	return e.sendExecutorEvent(event)
+}
+
+// sendExecutorOnFailedEvent generates an executor_on_failed event and sends it on the Events channel
+func (e *EventManager) SendExecutorOnFailedEvent(errorKey string, errorDetails error) error {
+	event := generateExecutorOnFailedEvent(
+		e.correlationId,
+		errorKey,
+		errorDetails,
+		uuid.New)
+	return e.sendExecutorEvent(event)
+}
+
+// sendExecutorEvent marshals an event and sends it on the Events channel
+func (e *EventManager) sendExecutorEvent(event map[string]any) error {
+	data, err := json.Marshal(event)
+	if err != nil {
+		return fmt.Errorf("cannot marshal JSON: err=%w", err)
+	}
+	e.events <- json.RawMessage(data)
+	return nil
+}
+
+// generateExecutorOnStartEvent creates a special executor_on_start event
+// to inform Insights that the Ansible job is beginning.
+func generateExecutorOnStartEvent(
+	correlationID string,
+	uuidNew createUuidFunc,
+) map[string]any {
+	return map[string]any{
+		"event":      "executor_on_start",
+		"uuid":       uuidNew().String(),
+		"counter":    -1,
+		"stdout":     "",
+		"start_line": 0,
+		"end_line":   0,
+		"event_data": map[string]any{
+			"crc_dispatcher_correlation_id": correlationID,
+		},
+	}
+}
+
+// generateExecutorOnFailedEvent creates a special executor_on_failed event
+// to inform Insights that the Ansible job failed to run.
+func generateExecutorOnFailedEvent(
+	correlationID string,
+	errorCode string,
+	errorDetails error,
+	uuidNew createUuidFunc,
+) map[string]any {
+	return map[string]any{
+		"event":      "executor_on_failed",
+		"uuid":       uuidNew().String(),
+		"counter":    -1,
+		"start_line": 0,
+		"end_line":   0,
+		"event_data": map[string]any{
+			"crc_dispatcher_correlation_id": correlationID,
+			"crc_dispatcher_error_code":     errorCode,
+			"crc_dispatcher_error_details":  errorDetails.Error(),
+		},
+	}
 }
 
 // buildRequestBody assembles a multipart/mixed HTTP request body suitable for
