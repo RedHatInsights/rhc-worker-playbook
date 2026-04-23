@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/goccy/go-yaml"
@@ -15,6 +16,8 @@ import (
 	"github.com/redhatinsights/yggdrasil/worker"
 	"github.com/subpop/go-log"
 )
+
+var playbookAlreadyRunning sync.Mutex
 
 func rx(
 	w *worker.Worker,
@@ -103,6 +106,28 @@ func rx(
 	if err := eventManager.SendExecutorOnStartEvent(); err != nil {
 		return err
 	}
+
+	// Try and lock the mutex.
+	// If the lock is successful, continue.
+	// If the lock is unsuccessful, a playbook is already running. Send an error to remediations and exit.
+	if !playbookAlreadyRunning.TryLock() {
+		// playbook is currently in progress
+		playbookAlreadyRunningErr := errors.New(
+			"a playbook run is already in progress, please wait until the current playbook finishes before executing another",
+		)
+
+		if err := eventManager.SendExecutorOnFailedEvent(
+			"ANSIBLE_PLAYBOOK_ALREADY_RUNNING",
+			playbookAlreadyRunningErr,
+		); err != nil {
+			return errors.Join(playbookAlreadyRunningErr, err)
+		}
+
+		return playbookAlreadyRunningErr
+	}
+
+	// Unlock the mutex after the playbook run
+	defer playbookAlreadyRunning.Unlock()
 
 	// Verify the playbook
 	if config.DefaultConfig.VerifyPlaybook {
