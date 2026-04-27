@@ -106,7 +106,7 @@ echo '"http://localhost:8000/insights_remove.yml"' | \
 
 This can then be piped to `pub` to publish the message:
 
-```console 
+```console
 echo '"http://localhost:8000/insights_remove.yml"' | \
   yggctl generate data-message \
   --metadata '{"return_url": "http://localhost:8000/", "crc_dispatcher_correlation_id": "insights_remove"}' \
