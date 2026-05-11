@@ -65,7 +65,7 @@ func (r *Runner) Run(playbook []byte) error {
 
 	// precreate the job_events directory so that we can watch for when events
 	// get written to it.
-	if err := os.MkdirAll(r.jobEventsPath, 0755); err != nil {
+	if err := os.MkdirAll(r.jobEventsPath, 0750); err != nil {
 		return fmt.Errorf(
 			"cannot create job_events directory: directory=%v err=%w",
 			r.jobEventsPath,
