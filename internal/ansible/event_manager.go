@@ -74,9 +74,11 @@ func (e *EventManager) TransmitCachedEvents(done chan struct{}) {
 		select {
 		case <-e.stopTransmittingEvents:
 			// Transmit one final batch of all events.
+			e.cachedEventsLock.RLock()
 			if err := e.transmitEvents(e.cachedEvents); err != nil {
 				log.Errorf("cannot transmit events: err=%v", err)
 			}
+			e.cachedEventsLock.RUnlock()
 			return
 		case <-timeout:
 			var batchEnd int
@@ -132,6 +134,8 @@ func (e *EventManager) transmitEvents(events []json.RawMessage) error {
 		if err != nil {
 			return fmt.Errorf("cannot write to body: err=%w", err)
 		}
+		// WriteByte always returns nil
+		// coverity[SUPPRESSED_ERROR]
 		_ = body.WriteByte('\n')
 	}
 	requestBody, outerContentType, err := buildRequestBody(
