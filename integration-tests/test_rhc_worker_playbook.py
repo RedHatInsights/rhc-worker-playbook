@@ -51,9 +51,9 @@ def test_playbook_execution_local_broker(
     """
     playbook_url = "http://localhost:8000/resources/create_file.yml"
 
-    assert not os.path.exists(
-        rhc_worker_test_file
-    ), "Test file already exists when it shouldn't"
+    assert not os.path.exists(rhc_worker_test_file), (
+        "Test file already exists when it shouldn't"
+    )
 
     logger.info(f"Playbook will be downloaded from: {playbook_url}")
     data_message = build_data_msg_for_worker_playbook(content=playbook_url)
@@ -285,13 +285,13 @@ def test_no_two_playbooks_at_once(
     rhc_worker_playbook_config_for_worker_test,
     yggdrasil_config_for_local_mqtt_broker,
     restart_services,
-): 
+):
     """
     test_stops:
     1. Publish a message to MQTT to start a playbook run
     2. While playbook is running, attempt to run another playbook
     3. Verify the second playbook fails to initialize
-    """   
+    """
     playbook_url = "http://localhost:8000/resources/pause1m.yml"
 
     logger.info(f"Playbook will be downloaded from: {playbook_url}")
