@@ -10,8 +10,8 @@ import (
 	"strings"
 
 	"github.com/redhatinsights/rhc-worker-playbook/internal/constants"
+	"github.com/redhatinsights/rhc-worker-playbook/internal/log"
 	"github.com/rjeczalik/notify"
-	"github.com/subpop/go-log"
 )
 
 // Runner maintains the state of a playbook run during execution.

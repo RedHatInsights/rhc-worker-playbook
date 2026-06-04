@@ -13,8 +13,8 @@ import (
 	"github.com/goccy/go-yaml"
 	"github.com/redhatinsights/rhc-worker-playbook/internal/ansible"
 	"github.com/redhatinsights/rhc-worker-playbook/internal/config"
+	"github.com/redhatinsights/rhc-worker-playbook/internal/log"
 	"github.com/redhatinsights/yggdrasil/worker"
-	"github.com/subpop/go-log"
 )
 
 var playbookAlreadyRunning sync.Mutex

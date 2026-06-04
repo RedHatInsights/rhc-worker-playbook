@@ -13,8 +13,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/redhatinsights/rhc-worker-playbook/internal/config"
+	"github.com/redhatinsights/rhc-worker-playbook/internal/log"
 	"github.com/redhatinsights/yggdrasil/worker"
-	"github.com/subpop/go-log"
 )
 
 // createUuidFunc is a function that returns a UUID, typically uuid.New(),

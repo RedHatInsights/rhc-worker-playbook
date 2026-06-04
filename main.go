@@ -9,8 +9,8 @@ import (
 
 	"github.com/redhatinsights/rhc-worker-playbook/internal/config"
 	"github.com/redhatinsights/rhc-worker-playbook/internal/constants"
+	"github.com/redhatinsights/rhc-worker-playbook/internal/log"
 	"github.com/redhatinsights/yggdrasil/worker"
-	"github.com/subpop/go-log"
 	"github.com/urfave/cli/v2"
 	"github.com/urfave/cli/v2/altsrc"
 )
@@ -63,7 +63,7 @@ func main() {
 	app.Action = mainAction
 
 	if err := app.Run(os.Args); err != nil {
-		log.Fatal(err)
+		log.Fatal(err.Error())
 	}
 }
 
