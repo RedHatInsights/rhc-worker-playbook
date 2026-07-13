@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os/exec"
 	"strings"
 	"sync"
@@ -14,7 +15,6 @@ import (
 	"github.com/redhatinsights/rhc-worker-playbook/internal/ansible"
 	"github.com/redhatinsights/rhc-worker-playbook/internal/config"
 	"github.com/redhatinsights/yggdrasil/worker"
-	"github.com/subpop/go-log"
 )
 
 var playbookAlreadyRunning sync.Mutex
@@ -27,8 +27,8 @@ func rx(
 	metadata map[string]string,
 	data []byte,
 ) error {
-	log.Infof("message received: message-id=%v", id)
-	defer log.Infof("message finished: message-id=%v", id)
+	slog.Info("message received:", "message-id", id)
+	defer slog.Info("message finished:", "message-id", id)
 
 	// Get returnURL from message metadata
 	returnURL, has := metadata["return_url"]
@@ -46,7 +46,7 @@ func rx(
 	// value loaded from the configuration file.
 	responseIntervalString, has := metadata["response_interval"]
 	if !has {
-		log.Warn("metadata missing response_interval, defaulting to 300")
+		slog.Warn("metadata missing response_interval, defaulting to 300")
 		responseIntervalString = "300"
 	}
 	responseInterval, err := time.ParseDuration(responseIntervalString + "s")
@@ -169,6 +169,7 @@ func rx(
 // standard input. If the playbook passes verification, the playbook, stripped
 // of "insights_signature" variables is returned.
 func verifyPlaybook(data []byte) ([]byte, error) {
+	slog.Info("verifying playbook")
 
 	stdin := bytes.NewReader(data)
 	stdoutb := new(bytes.Buffer)
@@ -184,6 +185,12 @@ func verifyPlaybook(data []byte) ([]byte, error) {
 	rhcPlaybookVerifierCmd.Stdin = stdin
 	rhcPlaybookVerifierCmd.Stdout = stdoutb
 	rhcPlaybookVerifierCmd.Stderr = stderrb
+
+	slog.Info("launching rhc-playbook-verifier subprocess")
+	slog.Debug("launching with parameters:",
+		"args", rhcPlaybookVerifierCmd.Args,
+		"env", rhcPlaybookVerifierCmd.Env,
+		"stdin", string(data))
 
 	err := rhcPlaybookVerifierCmd.Run()
 
@@ -202,7 +209,7 @@ func verifyPlaybook(data []byte) ([]byte, error) {
 	}
 
 	// verification succeeds, log here
-	log.Info("Playbook verified.")
+	slog.Info("playbook verified.")
 
 	// Register a custom unmarshaler to support the YAML 1.1 boolean types
 	// "yes/no" and "on/off".

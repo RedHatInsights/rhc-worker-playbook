@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,7 +12,6 @@ import (
 
 	"github.com/redhatinsights/rhc-worker-playbook/internal/constants"
 	"github.com/rjeczalik/notify"
-	"github.com/subpop/go-log"
 )
 
 // Runner maintains the state of a playbook run during execution.
@@ -59,12 +59,14 @@ func (r *Runner) Run(playbook []byte) error {
 	defer close(r.stopJobEventsWatch)
 
 	// write playbook to the filesystem
+	slog.Info("writing playbook to file:", "path", r.playbookPath)
 	if err := os.WriteFile(r.playbookPath, playbook, 0600); err != nil {
 		return fmt.Errorf("cannot write playbook file: path=%v err=%w", r.playbookPath, err)
 	}
 
 	// precreate the job_events directory so that we can watch for when events
 	// get written to it.
+	slog.Info("creating job_events directory:", "path", r.jobEventsPath)
 	if err := os.MkdirAll(r.jobEventsPath, 0750); err != nil {
 		return fmt.Errorf(
 			"cannot create job_events directory: directory=%v err=%w",
@@ -104,18 +106,26 @@ func (r *Runner) Run(playbook []byte) error {
 		),
 	}
 
+	slog.Info("launching python3 (ansible-runner) subprocess")
+	slog.Debug("launching with parameters:",
+		"args", ansibleRunnerCmd.Args,
+		"env", ansibleRunnerCmd.Env,
+	)
 	if err := ansibleRunnerCmd.Start(); err != nil {
 		return fmt.Errorf("cannot start ansible-runner: err=%w", err)
 	}
 
-	log.Infof("run started: pid=%v", ansibleRunnerCmd.Process.Pid)
+	slog.Info("run started:", "pid", ansibleRunnerCmd.Process.Pid)
 
 	if err := ansibleRunnerCmd.Wait(); err != nil {
 		return fmt.Errorf("error executing ansible-runner: err=%w", err)
 	}
 
 	defer func() {
-		log.Infof("run complete: status=%v", r.Status)
+		slog.Info("run complete:",
+			"pid", ansibleRunnerCmd.Process.Pid,
+			"status", r.Status,
+		)
 	}()
 
 	if err := r.processStatus(); err != nil {
@@ -128,10 +138,12 @@ func (r *Runner) Run(playbook []byte) error {
 // handleJobEvent is the handler function invoked each time a job_event file is
 // written to the job_events directory.
 func (r *Runner) handleJobEvent(event notify.EventInfo) {
-	if strings.HasSuffix(event.Path(), ".json") && !strings.Contains(event.Path(), "partial") {
-		data, err := os.ReadFile(event.Path())
+	eventPath := event.Path()
+	if strings.HasSuffix(event.Path(), ".json") && !strings.Contains(eventPath, "partial") {
+		slog.Info("received job event:", "path", eventPath)
+		data, err := os.ReadFile(eventPath)
 		if err != nil {
-			log.Errorf("cannot read file: file=%v error=%v", event.Path(), err)
+			slog.Error("cannot read file:", "path", eventPath, "err", err)
 			return
 		}
 
@@ -143,12 +155,9 @@ func (r *Runner) handleJobEvent(event notify.EventInfo) {
 		// still be included in the data structure.
 		var ansibleEvent map[string]any
 		if err := json.Unmarshal(data, &ansibleEvent); err != nil {
-			log.Errorf("cannot unmarshal data: data=%v error=%v", data, err)
+			slog.Error("cannot unmarshal data:", "data", data, "err", err)
 			return
 		}
-
-		// log the full event
-		log.Debugf("received job event: %v", prettyJson(data))
 
 		eventData, ok := ansibleEvent["event_data"]
 		if !ok {
@@ -177,7 +186,7 @@ func (r *Runner) handleJobEvent(event notify.EventInfo) {
 
 		modifiedData, err := json.Marshal(ansibleEvent)
 		if err != nil {
-			log.Errorf("cannot marshal JSON: err=%v", err)
+			slog.Error("cannot marshal JSON:", "err", err)
 			return
 		}
 
@@ -185,13 +194,13 @@ func (r *Runner) handleJobEvent(event notify.EventInfo) {
 
 		if err != nil {
 			// problem filtering, return original event
-			log.Errorf("error filtering job event: err=%v", err)
-			log.Info("sending unfiltered job event...")
+			slog.Warn("could not filter job event:", "err", err)
+			slog.Warn("sending unfiltered job event")
 			filteredModifiedData = modifiedData
 		}
 
 		r.events <- filteredModifiedData
-		log.Debugf("event sent: event=%v", prettyJson(filteredModifiedData))
+		slog.Debug("sent job event:", "event", filteredModifiedData)
 	}
 }
 
@@ -222,13 +231,13 @@ func (r *Runner) watchJobEvents() {
 	defer close(watchedEvents)
 
 	if err := notify.Watch(r.jobEventsPath, watchedEvents, notify.InMovedTo); err != nil {
-		log.Errorf("cannot watch path for events: path=%v err=%v", r.jobEventsPath, err)
+		slog.Error("cannot watch path for events:", "path", r.jobEventsPath, "err", err)
 		return
 	}
 	defer notify.Stop(watchedEvents)
 
-	log.Tracef("start watching for job events: path=%v", r.jobEventsPath)
-	defer log.Tracef("stop watching for job events: path=%v", r.jobEventsPath)
+	slog.Info("start watching for job events:", "path", r.jobEventsPath)
+	defer slog.Info("stop watching for job events:", "path", r.jobEventsPath)
 
 	for {
 		select {
@@ -255,19 +264,4 @@ func filterJobEvent(jobEventData []byte) ([]byte, error) {
 	}
 
 	return filteredData, nil
-}
-
-// prettyJson pretty-prints a given JSON byte array
-func prettyJson(jsonBytes []byte) string {
-	var jsonObject map[string]any
-	if err := json.Unmarshal(jsonBytes, &jsonObject); err != nil {
-		log.Errorf("cannot unmarshal JSON: err=%v", err)
-		return ""
-	}
-	pretty, err := json.MarshalIndent(jsonObject, "", "\t")
-	if err != nil {
-		log.Errorf("cannot marshal JSON: err=%v", err)
-		return fmt.Sprintf("%v", jsonObject)
-	}
-	return string(pretty)
 }

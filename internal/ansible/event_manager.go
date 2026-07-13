@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"mime/multipart"
 	"net/textproto"
 	"strings"
@@ -14,7 +15,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/redhatinsights/rhc-worker-playbook/internal/config"
 	"github.com/redhatinsights/yggdrasil/worker"
-	"github.com/subpop/go-log"
 )
 
 // createUuidFunc is a function that returns a UUID, typically uuid.New(),
@@ -76,7 +76,7 @@ func (e *EventManager) TransmitCachedEvents(done chan struct{}) {
 			// Transmit one final batch of all events.
 			e.cachedEventsLock.RLock()
 			if err := e.transmitEvents(e.cachedEvents); err != nil {
-				log.Errorf("cannot transmit events: err=%v", err)
+				slog.Error("cannot transmit events:", "err", err)
 			}
 			e.cachedEventsLock.RUnlock()
 			return
@@ -108,13 +108,15 @@ func (e *EventManager) TransmitCachedEvents(done chan struct{}) {
 
 			cachedEvents := append([]json.RawMessage{}, e.cachedEvents[batchStart:batchEnd]...)
 			e.cachedEventsLock.RUnlock()
-			log.Debugf(
-				"transmitting cached events: batchStart=%v batchEnd=%v",
+			slog.Info(
+				"transmitting cached events:",
+				"batchStart",
 				batchStart,
+				"batchEnd",
 				batchEnd,
 			)
 			if err := e.transmitEvents(cachedEvents); err != nil {
-				log.Errorf("cannot transmit events: err=%v", err)
+				slog.Error("cannot transmit events:", "err", err)
 				continue
 			}
 
@@ -143,7 +145,7 @@ func (e *EventManager) transmitEvents(events []json.RawMessage) error {
 		"runner-events",
 	)
 	if err != nil {
-		return fmt.Errorf("cannot build request body: err=%v", err)
+		return fmt.Errorf("cannot build request body: err=%w", err)
 	}
 
 	responseCode, responseMetadata, responseBody, err := e.worker.Transmit(
@@ -156,14 +158,14 @@ func (e *EventManager) transmitEvents(events []json.RawMessage) error {
 		requestBody.Bytes(),
 	)
 	if err != nil {
-		return fmt.Errorf("cannot transmit data: err=%v", err)
+		return fmt.Errorf("cannot transmit data: err=%w", err)
 	}
-	log.Debugf(
-		"received response: code=%v responseMetadata=%v",
-		responseCode,
-		responseMetadata,
+	slog.Info(
+		"received response:",
+		"responseCode", responseCode,
+		"responseMetadata", responseMetadata,
+		"responseBody", string(responseBody),
 	)
-	log.Tracef("responseBody=%v", string(responseBody))
 
 	if responseCode >= 400 {
 		// return an error if HTTP status code is 400 and up
@@ -253,7 +255,7 @@ func buildRequestBody(body string, filename string) (*bytes.Buffer, string, erro
 	defer func() {
 		closeErr := writer.Close()
 		if closeErr != nil {
-			log.Errorf("cannot close request body writer: %v", closeErr)
+			slog.Error("cannot close request body writer:", "err", closeErr)
 		}
 	}()
 

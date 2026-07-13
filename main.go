@@ -2,15 +2,16 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 
 	"github.com/redhatinsights/rhc-worker-playbook/internal/config"
 	"github.com/redhatinsights/rhc-worker-playbook/internal/constants"
 	"github.com/redhatinsights/yggdrasil/worker"
-	"github.com/subpop/go-log"
 	"github.com/urfave/cli/v2"
 	"github.com/urfave/cli/v2/altsrc"
 )
@@ -63,7 +64,11 @@ func main() {
 	app.Action = mainAction
 
 	if err := app.Run(os.Args); err != nil {
-		log.Fatal(err)
+		// previously called log.Fatal, equivalent to print and os.Exit(1)
+		// https://github.com/subpop/go-log/blob/ef6a7ef3d8f068b486fce9d933c04ef88a6003ea/log.go#L386
+		// https://pkg.go.dev/log#Fatal
+		slog.Error(err.Error())
+		os.Exit(1)
 	}
 }
 
@@ -83,11 +88,11 @@ func beforeAction(ctx *cli.Context) error {
 
 func mainAction(ctx *cli.Context) error {
 	loadConfigFromContext(ctx)
-	level, err := log.ParseLevel(config.DefaultConfig.LogLevel)
+	level, err := parseLevel(config.DefaultConfig.LogLevel)
 	if err != nil {
-		return cli.Exit(fmt.Errorf("cannot unmarshal log-level: %w", err), 1)
+		return cli.Exit(err, 1)
 	}
-	log.SetLevel(level)
+	slog.SetLogLoggerLevel(level)
 
 	w, err := worker.NewWorker(config.DefaultConfig.Directive, true, nil, nil, rx, nil)
 	if err != nil {
@@ -114,4 +119,25 @@ func loadConfigFromContext(ctx *cli.Context) {
 	config.DefaultConfig.VerifyPlaybook = ctx.Bool(config.FlagNameVerifyPlaybook)
 	config.DefaultConfig.ResponseInterval = ctx.Duration(config.FlagNameResponseInterval)
 	config.DefaultConfig.BatchEvents = ctx.Int(config.FlagNameBatchEvents)
+}
+
+// parseLevel parses the log level string from the config to an slog.Level
+func parseLevel(str string) (slog.Level, error) {
+	switch strings.ToUpper(str) {
+	case "ERROR":
+		return slog.LevelError, nil
+	case "WARN":
+		return slog.LevelWarn, nil
+	case "INFO":
+		return slog.LevelInfo, nil
+	case "DEBUG":
+		return slog.LevelDebug, nil
+	case "TRACE":
+		// slog has no "trace" level by default, use LevelDebug
+		// We've migrated all prior "trace" level log calls to other levels,
+		// but trace should still be a valid config option.
+		return slog.LevelDebug, nil
+	}
+
+	return new(slog.LevelVar).Level(), fmt.Errorf("cannot parse log level: %v", str)
 }
