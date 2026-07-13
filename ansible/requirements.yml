@@ -1,5 +1,5 @@
 collections:
-- name: ansible-posix-1.5.4.tar.gz
-  version: 1.5.4
-- name: community-general-9.2.0.tar.gz
-  version: 9.2.0
+- name: ansible-posix-2.2.1.tar.gz
+  version: 2.2.1
+- name: community-general-12.6.2.tar.gz
+  version: 12.6.2
