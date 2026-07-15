@@ -19,6 +19,37 @@ import (
 
 var playbookAlreadyRunning sync.Mutex
 
+type Playbook struct {
+	Name   string          `yaml:"name"`
+	Hosts  string          `yaml:"hosts"`
+	Become bool            `yaml:"become"`
+	Vars   map[string]any  `yaml:"vars"`
+	Tasks  []yaml.MapSlice `yaml:"tasks"`
+}
+
+func init() {
+	// Register a custom unmarshaler to support the YAML 1.1 boolean types
+	// "yes/no" and "on/off".
+	yaml.RegisterCustomUnmarshaler[bool](func(b1 *bool, b2 []byte) error {
+		if strings.ToLower(string(b2)) == "yes" || strings.ToLower(string(b2)) == "on" ||
+			strings.ToLower(string(b2)) == "true" {
+			*b1 = true
+		} else {
+			*b1 = false
+		}
+		return nil
+	})
+
+	// Register a custom marshaler to support the YAML 1.1 boolean types
+	// "yes/no" and "on/off".
+	yaml.RegisterCustomMarshaler[bool](func(b bool) ([]byte, error) {
+		if b {
+			return []byte("yes"), nil
+		}
+		return []byte("no"), nil
+	})
+}
+
 func rx(
 	w *worker.Worker,
 	addr string,
@@ -145,6 +176,22 @@ func rx(
 			return verifyPlaybookError
 		}
 	}
+
+	// Strip the signature - also verifies the data is YAML
+	data, err = stripSignature(data)
+	if err != nil {
+		stripSignatureError := err
+
+		if err := eventManager.SendExecutorOnFailedEvent(
+			"ANSIBLE_YAML_VALIDATION_FAILED",
+			stripSignatureError,
+		); err != nil {
+			return errors.Join(stripSignatureError, err)
+		}
+
+		return stripSignatureError
+	}
+
 	// Create the playbook runner and run the playbook
 	err = ansible.NewRunner(correlationId, events).Run(data)
 
@@ -166,8 +213,7 @@ func rx(
 
 // verifyPlaybook calls out via subprocess to insights-client's
 // ansible.playbook_verifier Python module, passes data as the process's
-// standard input. If the playbook passes verification, the playbook, stripped
-// of "insights_signature" variables is returned.
+// standard input
 func verifyPlaybook(data []byte) ([]byte, error) {
 	slog.Info("verifying playbook")
 
@@ -211,36 +257,14 @@ func verifyPlaybook(data []byte) ([]byte, error) {
 	// verification succeeds, log here
 	slog.Info("playbook verified.")
 
-	// Register a custom unmarshaler to support the YAML 1.1 boolean types
-	// "yes/no" and "on/off".
-	yaml.RegisterCustomUnmarshaler[bool](func(b1 *bool, b2 []byte) error {
-		if strings.ToLower(string(b2)) == "yes" || strings.ToLower(string(b2)) == "on" ||
-			strings.ToLower(string(b2)) == "true" {
-			*b1 = true
-		} else {
-			*b1 = false
-		}
-		return nil
-	})
+	return stdout, nil
+}
 
-	// Register a custom marshaler to support the YAML 1.1 boolean types
-	// "yes/no" and "on/off".
-	yaml.RegisterCustomMarshaler[bool](func(b bool) ([]byte, error) {
-		if b {
-			return []byte("yes"), nil
-		}
-		return []byte("no"), nil
-	})
-
-	type Playbook struct {
-		Name   string                 `yaml:"name"`
-		Hosts  string                 `yaml:"hosts"`
-		Become bool                   `yaml:"become"`
-		Vars   map[string]interface{} `yaml:"vars"`
-		Tasks  []yaml.MapSlice        `yaml:"tasks"`
-	}
+// stripSignature will confirm the playbook is YAML and return
+// the playbook stripped of "insights_signature" variables
+func stripSignature(data []byte) ([]byte, error) {
 	var playbooks []Playbook
-	if err := yaml.UnmarshalWithOptions(stdout, &playbooks); err != nil {
+	if err := yaml.UnmarshalWithOptions(data, &playbooks); err != nil {
 		return nil, fmt.Errorf("cannot unmarshal playbook: %v", err)
 	}
 	// ansible-runner returns errors when handed binary field values, so
