@@ -17,7 +17,38 @@ import (
 	"github.com/redhatinsights/yggdrasil/worker"
 )
 
+type Playbook struct {
+	Name   string          `yaml:"name"`
+	Hosts  string          `yaml:"hosts"`
+	Become bool            `yaml:"become"`
+	Vars   map[string]any  `yaml:"vars"`
+	Tasks  []yaml.MapSlice `yaml:"tasks"`
+}
+
 var playbookAlreadyRunning sync.Mutex
+
+func init() {
+	// Register a custom unmarshaler to support the YAML 1.1 boolean types
+	// "yes/no" and "on/off".
+
+	// full spec: https://yaml.org/type/bool.html
+	// allowed values:
+	//  y|Y|yes|Yes|YES|n|N|no|No|NO
+	// |true|True|TRUE|false|False|FALSE
+	// |on|On|ON|off|Off|OFF
+	yaml.RegisterCustomUnmarshaler[bool](func(b1 *bool, b2 []byte) error {
+		toString := strings.TrimSpace(string(b2))
+		switch toString {
+		case "y", "Y", "yes", "Yes", "YES", "true", "True", "TRUE", "on", "On", "ON":
+			*b1 = true
+		case "n", "N", "no", "No", "NO", "false", "False", "FALSE", "off", "Off", "OFF":
+			*b1 = false
+		default:
+			return fmt.Errorf("unable to parse boolean: %v", toString)
+		}
+		return nil
+	})
+}
 
 func rx(
 	w *worker.Worker,
@@ -211,34 +242,6 @@ func verifyPlaybook(data []byte) ([]byte, error) {
 	// verification succeeds, log here
 	slog.Info("playbook verified.")
 
-	// Register a custom unmarshaler to support the YAML 1.1 boolean types
-	// "yes/no" and "on/off".
-	yaml.RegisterCustomUnmarshaler[bool](func(b1 *bool, b2 []byte) error {
-		if strings.ToLower(string(b2)) == "yes" || strings.ToLower(string(b2)) == "on" ||
-			strings.ToLower(string(b2)) == "true" {
-			*b1 = true
-		} else {
-			*b1 = false
-		}
-		return nil
-	})
-
-	// Register a custom marshaler to support the YAML 1.1 boolean types
-	// "yes/no" and "on/off".
-	yaml.RegisterCustomMarshaler[bool](func(b bool) ([]byte, error) {
-		if b {
-			return []byte("yes"), nil
-		}
-		return []byte("no"), nil
-	})
-
-	type Playbook struct {
-		Name   string                 `yaml:"name"`
-		Hosts  string                 `yaml:"hosts"`
-		Become bool                   `yaml:"become"`
-		Vars   map[string]interface{} `yaml:"vars"`
-		Tasks  []yaml.MapSlice        `yaml:"tasks"`
-	}
 	var playbooks []Playbook
 	if err := yaml.UnmarshalWithOptions(stdout, &playbooks); err != nil {
 		return nil, fmt.Errorf("cannot unmarshal playbook: %v", err)
