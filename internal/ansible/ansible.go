@@ -36,19 +36,36 @@ type Runner struct {
 }
 
 // NewRunner creates a new Runner, uniquely identified by ID.
-func NewRunner(correlationId string, events chan json.RawMessage) *Runner {
-	return &Runner{
-		events:        events,
-		correlationId: correlationId,
-		playbookPath:  filepath.Join(constants.StateDir, correlationId+".yaml"),
-		jobEventsPath: filepath.Join(
-			constants.PrivateDataDir, "artifacts", correlationId, "job_events",
-		),
-		statusFilePath: filepath.Join(
-			constants.PrivateDataDir, "artifacts", correlationId, "status",
-		),
-		stopJobEventsWatch: make(chan struct{}),
+func NewRunner(correlationId string, events chan json.RawMessage) (*Runner, error) {
+	// sanitize filepaths
+	playbookPath := filepath.Join(constants.StateDir, correlationId+".yaml")
+	relativePath, err := filepath.Rel(constants.StateDir, filepath.Clean(playbookPath))
+	if err != nil {
+		return nil, err
 	}
+	if strings.HasPrefix(relativePath, "..") {
+		return nil, errors.New("invalid playbook path")
+	}
+
+	artifactsPath := filepath.Join(
+		constants.PrivateDataDir, "artifacts", correlationId, "job_events",
+	)
+	relativePath, err = filepath.Rel(constants.PrivateDataDir, filepath.Clean(artifactsPath))
+	if err != nil {
+		return nil, err
+	}
+	if strings.HasPrefix(relativePath, "..") {
+		return nil, errors.New("invalid artifacts path")
+	}
+
+	return &Runner{
+		events:             events,
+		correlationId:      correlationId,
+		playbookPath:       playbookPath,
+		jobEventsPath:      filepath.Join(artifactsPath, "job_events"),
+		statusFilePath:     filepath.Join(artifactsPath, "status"),
+		stopJobEventsWatch: make(chan struct{}),
+	}, nil
 }
 
 // Run begins running the provided playbook, using the given ID as the run

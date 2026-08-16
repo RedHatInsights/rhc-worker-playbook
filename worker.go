@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/goccy/go-yaml"
+	"github.com/google/uuid"
 	"github.com/redhatinsights/rhc-worker-playbook/internal/ansible"
 	"github.com/redhatinsights/rhc-worker-playbook/internal/config"
 	"github.com/redhatinsights/yggdrasil/worker"
@@ -71,6 +72,11 @@ func rx(
 	correlationId, has := metadata["crc_dispatcher_correlation_id"]
 	if !has {
 		return fmt.Errorf("invalid metadata: missing crc_dispatcher_correlation_id")
+	}
+
+	// Verify correlationID is a UUID
+	if err := uuid.Validate(correlationId); err != nil {
+		return fmt.Errorf("invalid UUID: %s", correlationId)
 	}
 
 	// Get responseInterval from metadata, conditionally overriding it with the
@@ -193,7 +199,11 @@ func rx(
 	}
 
 	// Create the playbook runner and run the playbook
-	err = ansible.NewRunner(correlationId, events).Run(data)
+	runner, err := ansible.NewRunner(correlationId, events)
+
+	if err == nil {
+		err = runner.Run(data)
+	}
 
 	if err != nil {
 		playbookRunError := fmt.Errorf("cannot run playbook: err=%w", err)
