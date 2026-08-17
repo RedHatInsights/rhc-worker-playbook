@@ -44,3 +44,8 @@ repos:
       - id: flake8
         args:
           - '--ignore=E402,E501'
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.0
+    hooks:
+      - id: gitleaks
