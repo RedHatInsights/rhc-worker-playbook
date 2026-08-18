@@ -132,6 +132,22 @@ func rx(
 		<-transmitCachedEventsDone
 	}()
 
+	// emitFailureEvent processes common errors as "executor_on_failed" events,
+	// and returns the error back to the caller so that it can be returned
+	// back to the rhc worker `dispatch` function.
+	// If `SendExecutorOnFailedEvent` returns an error, the errors are combined
+	// and returned.
+	emitFailureEvent := func(originalError error, errorKey string) error {
+		if err := eventManager.SendExecutorOnFailedEvent(
+			errorKey,
+			originalError,
+		); err != nil {
+			return errors.Join(originalError, err)
+		}
+
+		return originalError
+	}
+
 	// Publish an "executor_on_start" event to signal cloud connector that a run
 	// event has started
 	if err := eventManager.SendExecutorOnStartEvent(); err != nil {
@@ -146,15 +162,7 @@ func rx(
 		playbookAlreadyRunningErr := errors.New(
 			"a playbook run is already in progress, please wait until the current playbook finishes before executing another",
 		)
-
-		if err := eventManager.SendExecutorOnFailedEvent(
-			"ANSIBLE_PLAYBOOK_ALREADY_RUNNING",
-			playbookAlreadyRunningErr,
-		); err != nil {
-			return errors.Join(playbookAlreadyRunningErr, err)
-		}
-
-		return playbookAlreadyRunningErr
+		return emitFailureEvent(playbookAlreadyRunningErr, "ANSIBLE_PLAYBOOK_ALREADY_RUNNING")
 	}
 
 	// Unlock the mutex after the playbook run
@@ -164,32 +172,14 @@ func rx(
 	if config.DefaultConfig.VerifyPlaybook {
 		data, err = verifyPlaybook(data)
 		if err != nil {
-			verifyPlaybookError := err
-
-			if err := eventManager.SendExecutorOnFailedEvent(
-				"ANSIBLE_PLAYBOOK_SIGNATURE_VALIDATION_FAILED",
-				verifyPlaybookError,
-			); err != nil {
-				return errors.Join(verifyPlaybookError, err)
-			}
-
-			return verifyPlaybookError
+			return emitFailureEvent(err, "ANSIBLE_PLAYBOOK_SIGNATURE_VALIDATION_FAILED")
 		}
 	}
 
 	// Strip the signature - also verifies the data is YAML
 	data, err = stripSignature(data)
 	if err != nil {
-		stripSignatureError := err
-
-		if err := eventManager.SendExecutorOnFailedEvent(
-			"ANSIBLE_YAML_VALIDATION_FAILED",
-			stripSignatureError,
-		); err != nil {
-			return errors.Join(stripSignatureError, err)
-		}
-
-		return stripSignatureError
+		return emitFailureEvent(err, "ANSIBLE_YAML_VALIDATION_FAILED")
 	}
 
 	// Create the playbook runner and run the playbook
@@ -197,15 +187,7 @@ func rx(
 
 	if err != nil {
 		playbookRunError := fmt.Errorf("cannot run playbook: err=%w", err)
-
-		if err := eventManager.SendExecutorOnFailedEvent(
-			"UNDEFINED_ERROR",
-			playbookRunError,
-		); err != nil {
-			return errors.Join(playbookRunError, err)
-		}
-
-		return playbookRunError
+		return emitFailureEvent(playbookRunError, "UNDEFINED_ERROR")
 	}
 
 	return nil
