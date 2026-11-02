@@ -1,10 +1,5 @@
 name: Increment version and open PR
 
-on:
-  workflow_dispatch:
-  schedule:
-    - cron: '0 0 1 * *'
-
 jobs:
   update-version:
     runs-on: ubuntu-latest
