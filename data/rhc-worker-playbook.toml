@@ -7,4 +7,4 @@ directive = "rhc_worker_playbook"
 verify-playbook = true
 
 # how verbose the output should be
-log-level = "debug"
+log-level = "info"
